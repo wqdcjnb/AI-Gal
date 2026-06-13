@@ -15,11 +15,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CoverUpload } from "@/components/cover-upload"
 import {
   ArrowLeft,
   Sparkles,
   Loader2,
-  Upload,
   FileText,
   BookOpen,
 } from "lucide-react"
@@ -51,6 +51,7 @@ export default function NewProjectPage() {
   const [description, setDescription] = useState("")
   const [category, setCategory] = useState<GameCategory>("校园")
   const [storyLength, setStoryLength] = useState<StoryLength>("短篇")
+  const [coverUrl, setCoverUrl] = useState("")
   const [worldSetting, setWorldSetting] = useState("")
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -82,6 +83,7 @@ export default function NewProjectPage() {
     updateProject(project.id, {
       name: name.trim(),
       description,
+      coverUrl,
       category,
       storyLength,
       worldSetting,
@@ -138,15 +140,11 @@ export default function NewProjectPage() {
 
             <div className="space-y-2">
               <Label>作品封面</Label>
-              <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:bg-muted/50 transition-colors cursor-pointer">
-                <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  点击上传封面图片（可选）
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  PNG/JPG, 推荐 400x600
-                </p>
-              </div>
+              <CoverUpload
+                value={coverUrl}
+                onChange={(url) => setCoverUrl(url)}
+                recommendedSize="400x600"
+              />
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">

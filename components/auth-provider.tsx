@@ -13,6 +13,8 @@ import { AuthDialog } from "./auth-dialog";
 
 interface AuthUser {
   email: string;
+  nickname?: string;
+  avatarUrl?: string;
 }
 
 interface AuthContextType {
@@ -20,6 +22,7 @@ interface AuthContextType {
   loading: boolean;
   openAuth: () => void;
   logout: () => Promise<void>;
+  updateUser: (updates: Partial<AuthUser>) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -27,6 +30,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   openAuth: () => {},
   logout: async () => {},
+  updateUser: () => {},
 });
 
 export function useAuth() {
@@ -45,8 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetch("/api/auth/me")
       .then((res) => res.json())
       .then((data) => {
-        if (data.loggedIn) {
-          setUser(data.user);
+        if (data.loggedIn && data.user) {
+          setUser({
+            email: data.user.email,
+            nickname: data.user.nickname || data.user.email?.split("@")[0] || "",
+            avatarUrl: data.user.avatarUrl || "",
+          });
         }
       })
       .finally(() => setLoading(false));
@@ -69,18 +77,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/");
   }, [router]);
 
+  const updateUser = useCallback((updates: Partial<AuthUser>) => {
+    setUser((prev) => (prev ? { ...prev, ...updates } : null));
+  }, []);
+
   const handleLoginSuccess = useCallback(
-    (email: string) => {
-      setUser({ email });
+    async (email: string) => {
       setDialogOpen(false);
-      // 登录成功后跳转到 Dashboard
+      // 登录成功后从服务端拉取完整的用户信息（昵称、头像等）
+      // 避免使用 email 前缀作为默认昵称，导致覆盖已保存的信息
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
+        if (data.loggedIn && data.user) {
+          setUser({
+            email: data.user.email,
+            nickname: data.user.nickname || email.split("@")[0],
+            avatarUrl: data.user.avatarUrl || "",
+          });
+        } else {
+          // 降级：无法获取完整信息时用 email 构造
+          setUser({ email, nickname: email.split("@")[0], avatarUrl: "" });
+        }
+      } catch {
+        // 网络异常降级
+        setUser({ email, nickname: email.split("@")[0], avatarUrl: "" });
+      }
       router.push("/dashboard");
     },
     [router]
   );
 
   return (
-    <AuthContext.Provider value={{ user, loading, openAuth, logout }}>
+    <AuthContext.Provider value={{ user, loading, openAuth, logout, updateUser }}>
       {children}
       {!user && (
         <AuthDialog

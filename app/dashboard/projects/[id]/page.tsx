@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowRight, FileText, BookOpen, Upload } from "lucide-react"
+import { CoverUpload } from "@/components/cover-upload"
+import { ArrowRight, FileText, BookOpen } from "lucide-react"
 import { useState } from "react"
 import type { GameCategory, StoryLength } from "@/types/project"
 import Link from "next/link"
@@ -41,6 +42,7 @@ export default function ProjectBasicInfo() {
   const [description, setDescription] = useState(project?.description || "")
   const [category, setCategory] = useState<GameCategory>(project?.category || "校园")
   const [storyLength, setStoryLength] = useState<StoryLength>(project?.storyLength || "短篇")
+  const [coverUrl, setCoverUrl] = useState(project?.coverUrl || "")
   const [worldSetting, setWorldSetting] = useState(project?.worldSetting || "")
   const [saved, setSaved] = useState(false)
 
@@ -48,6 +50,7 @@ export default function ProjectBasicInfo() {
     if (project) {
       setName(project.name)
       setDescription(project.description)
+      setCoverUrl(project.coverUrl || "")
       setCategory(project.category)
       setStoryLength(project.storyLength)
       setWorldSetting(project.worldSetting)
@@ -59,6 +62,7 @@ export default function ProjectBasicInfo() {
     updateProject(projectId, {
       name: name.trim(),
       description,
+      coverUrl,
       category,
       storyLength,
       worldSetting,
@@ -89,10 +93,11 @@ export default function ProjectBasicInfo() {
             </div>
             <div className="space-y-2">
               <Label>作品封面</Label>
-              <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:bg-muted/50 transition-colors cursor-pointer">
-                <Upload className="h-6 w-6 text-muted-foreground mx-auto mb-1" />
-                <p className="text-sm text-muted-foreground">上传封面 (可选)</p>
-              </div>
+              <CoverUpload
+                value={coverUrl}
+                onChange={(url) => setCoverUrl(url)}
+                recommendedSize="400x600"
+              />
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">

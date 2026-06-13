@@ -27,8 +27,9 @@ export function Topbar({ onMenuClick }: TopbarProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const emailName = user?.email?.split("@")[0] || "User"
-  const avatarLetter = emailName[0]?.toUpperCase() || "U"
+  const displayName = user?.nickname || user?.email?.split("@")[0] || "User"
+  const avatarLetter = displayName[0]?.toUpperCase() || "U"
+  const avatarUrl = user?.avatarUrl || ""
 
   return (
     <header className="h-14 border-b border-border bg-background flex items-center justify-between px-4 sticky top-0 z-20">
@@ -63,11 +64,19 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             onClick={() => setDropdownOpen(!dropdownOpen)}
             className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-accent transition-colors"
           >
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white flex items-center justify-center text-xs font-semibold">
-              {avatarLetter}
-            </div>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={displayName}
+                className="h-8 w-8 rounded-full object-cover border-2 border-border"
+              />
+            ) : (
+              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white flex items-center justify-center text-xs font-semibold">
+                {avatarLetter}
+              </div>
+            )}
             <span className="text-sm hidden sm:block max-w-[120px] truncate">
-              {emailName}
+              {displayName}
             </span>
             <ChevronDown
               className={`h-3 w-3 text-muted-foreground transition-transform hidden sm:block ${
@@ -81,9 +90,9 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             <div className="absolute right-0 top-full mt-1 w-56 bg-background border border-border rounded-xl shadow-lg animate-in fade-in zoom-in-95 duration-150 z-50">
               {/* User Info */}
               <div className="px-4 py-3 border-b border-border">
-                <p className="text-sm font-medium truncate">{user?.email}</p>
+                <p className="text-sm font-medium truncate">{displayName}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  已登录账号
+                  {user?.email}
                 </p>
               </div>
 

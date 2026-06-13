@@ -10,7 +10,8 @@
  *
  * CloudBase Auth API 文档：https://docs.cloudbase.net/api-reference/server/node-sdk/auth
  */
-import app from "@/lib/cloudbase";
+import app, { db } from "@/lib/cloudbase";
+import { COLLECTIONS } from "@/lib/db-schema";
 
 // CloudBase Auth API 基础路径
 const AUTH_API_BASE = "/auth/v1";
@@ -107,17 +108,19 @@ export async function registerUser(
   verificationId: string
 ): Promise<{
   success: boolean;
+  username?: string;
   accessToken?: string;
   refreshToken?: string;
   uid?: string;
   message: string;
 }> {
   try {
+    const username = "u" + Date.now().toString().slice(-8)
     const adminToken = await getAdminToken();
     const result = await authApi(
       "/signup",
       {
-        login_type: "EMAIL",
+        username,
         email,
         password,
         verification_code: verificationCode,
@@ -130,6 +133,7 @@ export async function registerUser(
       console.log(`[CloudBase Auth] 用户注册成功: ${email}`);
       return {
         success: true,
+        username,
         accessToken: result.body?.access_token,
         refreshToken: result.body?.refresh_token,
         uid: result.body?.sub || result.body?.uid || email,
@@ -163,10 +167,20 @@ export async function loginWithPassword(
   message: string;
 }> {
   try {
+    // 从 users 集合查询注册时生成的 username
+    let username = ""
+    try {
+      const res = await db.collection(COLLECTIONS.USERS).where({ email }).limit(1).get()
+      username = res.data?.[0]?.username || ""
+    } catch { /* users 集合不存在则降级 */ }
+
+    // 降级：查不到 username 时直接尝试 email（兼容旧用户）
+    const loginName = username || email
+
     const adminToken = await getAdminToken();
     const result = await authApi(
       "/signin",
-      { username: email, password },
+      { username: loginName, password },
       adminToken
     );
 
@@ -307,6 +321,86 @@ export function parseAccessToken(token: string): {
     return { uid, email };
   } catch {
     return null;
+  }
+}
+
+/**
+ * 用户级 Auth API 调用（直接 HTTP，不走 cloudbaseRequest 的 admin 签名）
+ */
+async function userAuthApi(
+  path: string,
+  data: any,
+  userAccessToken: string,
+  method = "POST"
+) {
+  const envId = process.env.CLOUDBASE_ENV_ID || (app as any).config?.env || ""
+
+  const url = `https://${envId}.service.tcloudbase.com/auth/v1${path}`
+
+  console.log("========== CloudBase Request ==========")
+  console.log("envId:", envId)
+  console.log("url:", url)
+  console.log("method:", method)
+  console.log("body:", JSON.stringify(data))
+
+  const res = await fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${userAccessToken}`,
+    },
+    body: JSON.stringify(data),
+  })
+
+  const text = await res.text()
+
+  console.log("status:", res.status)
+  console.log("response:", text)
+
+  return JSON.parse(text)
+}
+
+/**
+ * 发送重置密码验证码
+ *
+ * POST /auth/v1/user/reauthenticate
+ * Authorization: Bearer <user_access_token>
+ * Body: { verify_opt: "email_code" }
+ *
+ * 返回 verificationId 用于后续修改密码时传递
+ */
+export async function sendResetPasswordCode(email: string) {
+  return sendVerificationCode(email, "signup")
+}
+
+/**
+ * 修改密码
+ *
+ * PATCH /auth/v1/user/password
+ * Authorization: Bearer <user_access_token>
+ * Body: { new_password, confirm_password, verify_code, verification_id? }
+ */
+export async function resetPassword(
+  userAccessToken: string,
+  newPassword: string,
+  verifyCode: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const resBody = await userAuthApi(
+      "/user/password",
+      { new_password: newPassword, confirm_password: newPassword, verify_code: verifyCode },
+      userAccessToken,
+      "PATCH"
+    )
+    if (!resBody?.error_description && !resBody?.error) {
+      return { success: true, message: "密码修改成功" }
+    }
+    return {
+      success: false,
+      message: resBody?.error_description || resBody?.error || "密码修改失败",
+    }
+  } catch (error: any) {
+    return { success: false, message: error.message || "密码修改失败" }
   }
 }
 

@@ -4,6 +4,8 @@
  * Body: { email, password, verificationCode, verificationId }
  */
 import { registerUser } from "@/lib/cloudbase-auth";
+import { db } from "@/lib/cloudbase";
+import { COLLECTIONS } from "@/lib/db-schema";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -38,6 +40,24 @@ export async function POST(request: Request) {
 
     if (!result.success || !result.accessToken) {
       return NextResponse.json(result, { status: 400 });
+    }
+
+    // 存储生成的 username，供 login 时查询
+    if (result.username) {
+      try {
+        const existing = await db.collection(COLLECTIONS.USERS).where({ uid: result.uid || email }).limit(1).get()
+        if (!existing.data?.length) {
+          await db.collection(COLLECTIONS.USERS).add({
+            uid: result.uid || email,
+            email,
+            username: result.username,
+            nickname: email.split("@")[0] || email,
+            avatarUrl: "",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          })
+        }
+      } catch { /* 静默失败，不影响注册 */ }
     }
 
     const cookieStore = await cookies();

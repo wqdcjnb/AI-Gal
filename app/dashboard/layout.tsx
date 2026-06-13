@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { useAuth } from "@/components/auth-provider";
@@ -18,6 +18,13 @@ export default function DashboardLayout({
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // 未登录则跳回首页（放在 useEffect 中避免在渲染期间修改 Router 状态）
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/");
+    }
+  }, [loading, user, router]);
+
   // 加载中
   if (loading) {
     return (
@@ -27,9 +34,8 @@ export default function DashboardLayout({
     );
   }
 
-  // 未登录则跳回首页
+  // 未登录时不渲染内容（等待 useEffect 跳转）
   if (!user) {
-    router.replace("/");
     return null;
   }
 

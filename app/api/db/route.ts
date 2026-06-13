@@ -16,7 +16,6 @@ async function ensureCollection(name: string) {
   } catch (error: unknown) {
     // 集合已存在时会报错，忽略即可
     if (!String(error).includes("already exist") && !String(error).includes("ResourceConflict")) {
-      // eslint-disable-next-line no-console
       console.warn(`[CloudBase] 创建集合 "${name}" 出现异常:`, String(error));
     }
   }
