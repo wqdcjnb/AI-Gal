@@ -1,10 +1,10 @@
-import FAQ from "@/components/faq";
-import Features from "@/components/features";
-import Footer from "@/components/footer";
-import Hero from "@/components/hero";
-import { Navbar } from "@/components/navbar";
-import Pricing from "@/components/pricing";
-import Testimonial from "@/components/testimonial";
+import FAQ from "@/components/faq"
+import Features from "@/components/features"
+import Footer from "@/components/footer"
+import Hero from "@/components/hero"
+import { Navbar } from "@/components/navbar"
+import CTASection from "@/components/pricing"
+import Highlight from "@/components/testimonial"
 
 export default function Home() {
   return (
@@ -12,10 +12,10 @@ export default function Home() {
       <Navbar />
       <Hero />
       <Features />
+      <Highlight />
       <FAQ />
-      <Testimonial />
-      <Pricing />
+      <CTASection />
       <Footer />
     </>
-  );
+  )
 }

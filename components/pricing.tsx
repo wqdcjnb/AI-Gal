@@ -1,108 +1,75 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-import { CircleCheck } from "lucide-react";
+import { Button } from "@/components/ui/button"
+import { ArrowUpRight, Heart, Sparkles, Zap } from "lucide-react"
+import Link from "next/link"
 
-const plans = [
-  {
-    name: "Starter",
-    price: 19,
-    description:
-      "Get 20 AI-generated portraits with 2 unique styles and filters.",
-    features: [
-      "5 hours turnaround time",
-      "20 AI portraits",
-      "Choice of 2 styles",
-      "Choice of 2 filters",
-      "2 retouch credits",
-    ],
-    buttonText: "Get 20 portraits in 5 hours",
-  },
-  {
-    name: "Advanced",
-    price: 29,
-    isRecommended: true,
-    description:
-      "Get 50 AI-generated portraits with 5 unique styles and filters.",
-    features: [
-      "3 hours turnaround time",
-      "50 AI portraits",
-      "Choice of 5 styles",
-      "Choice of 5 filters",
-      "5 retouch credits",
-    ],
-    buttonText: "Get 50 portraits in 3 hours",
-    isPopular: true,
-  },
-  {
-    name: "Premium",
-    price: 49,
-    description:
-      "Get 100 AI-generated portraits with 10 unique styles and filters.",
-    features: [
-      "1-hour turnaround time",
-      "100 AI portraits",
-      "Choice of 10 styles",
-      "Choice of 10 filters",
-      "10 retouch credits",
-    ],
-    buttonText: "Get 100 portraits in 1 hour",
-  },
-];
-
-const Pricing = () => {
+const CTASection = () => {
   return (
-    <div
-      id="pricing"
-      className="max-w-(--breakpoint-lg) mx-auto py-12 xs:py-20 px-6"
-    >
-      <h1 className="text-4xl xs:text-5xl font-semibold text-center tracking-tight">
-        Pricing
-      </h1>
-      <div className="mt-8 xs:mt-14 grid grid-cols-1 lg:grid-cols-3 items-center gap-8 lg:gap-0">
-        {plans.map((plan) => (
-          <div
-            key={plan.name}
-            className={cn(
-              "relative bg-accent/50 border p-7 rounded-xl lg:rounded-none lg:first:rounded-l-xl lg:last:rounded-r-xl",
-              {
-                "bg-background border-[2px] border-primary py-12 rounded-xl!":
-                  plan.isPopular,
-              }
-            )}
-          >
-            {plan.isPopular && (
-              <Badge className="absolute top-0 right-1/2 translate-x-1/2 -translate-y-1/2">
-                Most Popular
-              </Badge>
-            )}
-            <h3 className="text-lg font-medium">{plan.name}</h3>
-            <p className="mt-2 text-4xl font-bold">${plan.price}</p>
-            <p className="mt-4 font-medium text-muted-foreground">
-              {plan.description}
-            </p>
-            <Separator className="my-6" />
-            <ul className="space-y-2">
-              {plan.features.map((feature) => (
-                <li key={feature} className="flex items-start gap-2">
-                  <CircleCheck className="h-4 w-4 mt-1 text-green-600" />
-                  {feature}
-                </li>
-              ))}
-            </ul>
+    <div className="max-w-(--breakpoint-xl) mx-auto w-full py-12 xs:py-20 px-6">
+      <div className="relative rounded-2xl overflow-hidden border border-border bg-gradient-to-br from-purple-500/5 via-pink-500/5 to-orange-500/5 p-8 sm:p-12 lg:p-16 text-center">
+        {/* Background decoration */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-gradient-to-b from-purple-500/10 via-pink-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative">
+          <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-500/10 to-pink-500/10 px-3 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 mb-6">
+            <Heart className="h-3 w-3" />
+            永久免费 · 无限制
+          </div>
+
+          <h2 className="text-3xl xs:text-4xl md:text-5xl font-semibold tracking-tight max-w-2xl mx-auto">
+            准备好
+            <span className="bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
+              {" "}创造你的故事{" "}
+            </span>
+            了吗？
+          </h2>
+          <p className="mt-4 text-muted-foreground max-w-xl mx-auto text-lg">
+            无需编程，无需付费，打开浏览器即可开始。AI 将陪伴你完成从灵感构思到游戏成品的全过程。
+          </p>
+
+          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button
-              variant={plan.isPopular ? "default" : "outline"}
               size="lg"
-              className="w-full mt-6 rounded-full"
+              className="rounded-full text-base bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-none shadow-lg shadow-purple-500/25"
+              asChild
             >
-              {plan.buttonText}
+              <Link href="/dashboard/projects/new">
+                <Zap className="h-5! w-5!" />
+                立即免费开始
+                <ArrowUpRight className="h-5! w-5!" />
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="rounded-full text-base shadow-none"
+              asChild
+            >
+              <Link href="/help">
+                <Sparkles className="h-5! w-5!" />
+                查看使用教程
+              </Link>
             </Button>
           </div>
-        ))}
+
+          <div className="mt-10 grid sm:grid-cols-3 gap-6 max-w-lg mx-auto">
+            {[
+              { icon: Sparkles, text: "AI驱动创作" },
+              { icon: Heart, text: "永久免费" },
+              { icon: Zap, text: "一键导出Ren'Py" },
+            ].map((item) => (
+              <div
+                key={item.text}
+                className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
+              >
+                <item.icon className="h-4 w-4 text-purple-500" />
+                <span>{item.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default Pricing;
+export default CTASection
