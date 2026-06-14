@@ -1,11 +1,12 @@
 /**
  * POST /api/auth/login
- * 登录：密码登录 或 验证码登录 → CloudBase Auth 验证 → 写入 Cookie
+ * 登录 → 转发到云函数 auth-login，API Route 负责 Cookie 管理
  *
  * 密码登录: { email, password, type: "password" }
  * 验证码登录: { email, verificationCode, verificationId, type: "code" }
  */
-import { loginWithPassword, loginWithCode, validatePasswordStrength } from "@/lib/cloudbase-auth";
+import { loginWithPassword, loginWithCode } from "@/lib/auth/login";
+import { validatePasswordStrength } from "@/lib/auth/validate";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -24,14 +25,7 @@ export async function POST(request: Request) {
       );
     }
 
-    let result: {
-      success: boolean;
-      accessToken?: string;
-      refreshToken?: string;
-      uid?: string;
-      message: string;
-    };
-
+    // ---- 参数校验 ----
     if (type === "code") {
       const { verificationCode, verificationId } = body;
       if (!verificationCode || !verificationId) {
@@ -40,11 +34,6 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      result = await loginWithCode(
-        email.trim().toLowerCase(),
-        verificationCode,
-        verificationId
-      );
     } else {
       const { password } = body;
       if (!password) {
@@ -53,22 +42,33 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      const strength = validatePasswordStrength(password)
+      const strength = validatePasswordStrength(password);
       if (!strength.valid) {
         return NextResponse.json(
           { success: false, message: strength.message },
           { status: 400 }
         );
       }
-      result = await loginWithPassword(email.trim().toLowerCase(), password);
+    }
+
+    // ---- 调用本地登录函数 ----
+    let result: { success: boolean; accessToken?: string; uid?: string; message: string };
+
+    if (type === "code") {
+      result = await loginWithCode(
+        email.trim().toLowerCase(), body.verificationCode, body.verificationId
+      );
+    } else {
+      result = await loginWithPassword(email.trim().toLowerCase(), body.password);
     }
 
     if (!result.success || !result.accessToken) {
       return NextResponse.json(result, { status: 401 });
     }
 
+    // ---- 设置登录 Cookie ----
     const cookieStore = await cookies();
-    cookieStore.set(COOKIE_NAME, result.accessToken, {
+    cookieStore.set(COOKIE_NAME, result.accessToken!, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

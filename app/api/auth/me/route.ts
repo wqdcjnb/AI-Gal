@@ -3,7 +3,7 @@
  * 获取当前用户信息（从 Cookie 中的 CloudBase access_token 解析）
  * 同时查询 users 集合获取昵称等扩展信息
  */
-import { parseAccessToken } from "@/lib/cloudbase-auth";
+import { parseAccessToken } from "@/lib/auth/token";
 import { db, default as app } from "@/lib/cloudbase";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";

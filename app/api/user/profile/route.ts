@@ -6,7 +6,7 @@
  */
 
 import { db, default as app } from "@/lib/cloudbase"
-import { parseAccessToken } from "@/lib/cloudbase-auth"
+import { parseAccessToken } from "@/lib/auth/token"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { COLLECTIONS } from "@/lib/db-schema"

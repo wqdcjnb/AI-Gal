@@ -1,9 +1,8 @@
 /**
  * POST /api/auth/send-code
- * 发送邮箱验证码（CloudBase Auth 发送真实邮件）
- * Body: { email, type: "signup" | "signin" }
+ * 发送邮箱验证码 → 转发到云函数 auth-send-code
  */
-import { sendVerificationCode } from "@/lib/cloudbase-auth";
+import { sendVerificationCode } from "@/lib/auth/verification";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {

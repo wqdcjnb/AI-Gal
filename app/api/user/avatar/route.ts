@@ -14,7 +14,7 @@
  * 5. 更新 users 集合，持久化 fileID
  */
 
-import { parseAccessToken } from "@/lib/cloudbase-auth"
+import { parseAccessToken } from "@/lib/auth/token"
 import cloudbaseApp from "@/lib/cloudbase"
 import { db } from "@/lib/cloudbase"
 import { cookies } from "next/headers"

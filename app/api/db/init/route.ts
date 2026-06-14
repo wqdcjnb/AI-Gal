@@ -1,136 +1,41 @@
 /**
  * POST /api/db/init
- * 一键初始化 AI-Gal 全部数据库集合 & 索引
- *
- * 调用方式：POST /api/db/init
- * 生产环境需加鉴权（仅管理员可调用）
+ * 初始化数据库集合 & 索引
  */
+import { db } from "@/lib/cloudbase";
+import { NextResponse } from "next/server";
+import { COLLECTIONS, INDEXES, type IndexDef } from "@/lib/db-schema";
 
-import { db } from "@/lib/cloudbase"
-import { NextResponse } from "next/server"
-import { COLLECTIONS, INDEXES, type IndexDef } from "@/lib/db-schema"
-
-interface InitResult {
-  collection: string
-  status: "created" | "exists" | "error"
-  message: string
-}
-
-interface IndexResult {
-  collection: string
-  indexName: string
-  status: "created" | "exists" | "error"
-  message: string
-}
-
-// ============================================================
-// 确保集合存在（不存在则创建）
-// ============================================================
-
-async function ensureCollection(name: string): Promise<InitResult> {
+async function ensureCollection(name: string) {
   try {
-    await db.createCollection(name)
-    return { collection: name, status: "created", message: "集合已创建" }
-  } catch (error: unknown) {
-    const errMsg = String(error)
-    // CloudBase: 集合已存在时报错
-    if (errMsg.includes("already exist") || errMsg.includes("ResourceConflict")) {
-      return { collection: name, status: "exists", message: "集合已存在" }
-    }
-    return { collection: name, status: "error", message: errMsg }
+    await db.createCollection(name);
+    return { collection: name, status: "created" };
+  } catch (e: any) {
+    if (String(e).includes("already exist")) return { collection: name, status: "exists" };
+    return { collection: name, status: "error", message: String(e) };
   }
 }
 
-// ============================================================
-// 确保索引存在
-// ============================================================
-
-async function ensureIndex(def: IndexDef): Promise<IndexResult> {
+async function ensureIndex(def: IndexDef) {
   try {
-    // CloudBase Node SDK 内部暴露了 MongoDB 兼容的 createIndex
-    // 类型定义未包含，需用 any 绕过
-    const col = db.collection(def.collection) as unknown as {
-      createIndex: (
-        keys: Record<string, 1 | -1>,
-        opts: { name: string; unique: boolean }
-      ) => Promise<void>
-    }
-    await col.createIndex(def.keys, {
-      name: def.name,
-      unique: def.unique ?? false,
-    })
-    return {
-      collection: def.collection,
-      indexName: def.name,
-      status: "created",
-      message: "索引已创建",
-    }
-  } catch (error: unknown) {
-    const errMsg = String(error)
-    if (errMsg.includes("already exists") || errMsg.includes("IndexOptionsConflict")) {
-      return {
-        collection: def.collection,
-        indexName: def.name,
-        status: "exists",
-        message: "索引已存在",
-      }
-    }
-    return {
-      collection: def.collection,
-      indexName: def.name,
-      status: "error",
-      message: errMsg,
-    }
+    const col = db.collection(def.collection) as any;
+    await col.createIndex(def.keys, { name: def.name, unique: def.unique ?? false });
+    return { collection: def.collection, index: def.name, status: "created" };
+  } catch (e: any) {
+    if (String(e).includes("already exist")) return { collection: def.collection, index: def.name, status: "exists" };
+    return { collection: def.collection, index: def.name, status: "error", message: String(e) };
   }
 }
-
-// ============================================================
-// POST 处理器
-// ============================================================
 
 export async function POST() {
-  const startTime = Date.now()
+  const results = { collections: [] as any[], indexes: [] as any[] };
 
-  // Step 1: 创建集合
-  const collectionResults: InitResult[] = []
   for (const name of Object.values(COLLECTIONS)) {
-    const result = await ensureCollection(name)
-    collectionResults.push(result)
+    results.collections.push(await ensureCollection(name));
   }
-
-  // Step 2: 创建索引
-  const indexResults: IndexResult[] = []
   for (const def of INDEXES) {
-    const result = await ensureIndex(def)
-    indexResults.push(result)
+    results.indexes.push(await ensureIndex(def));
   }
 
-  const elapsed = Date.now() - startTime
-
-  // 统计
-  const collectionsCreated = collectionResults.filter((r) => r.status === "created").length
-  const collectionsExisted = collectionResults.filter((r) => r.status === "exists").length
-  const indexesCreated = indexResults.filter((r) => r.status === "created").length
-  const indexesExisted = indexResults.filter((r) => r.status === "exists").length
-
-  return NextResponse.json({
-    success: true,
-    elapsed: `${elapsed}ms`,
-    summary: {
-      collections: {
-        total: collectionResults.length,
-        created: collectionsCreated,
-        existed: collectionsExisted,
-      },
-      indexes: {
-        total: indexResults.length,
-        created: indexesCreated,
-        existed: indexesExisted,
-      },
-    },
-    details: {
-      collections: collectionResults,
-      indexes: indexResults,
-    },
-  })
+  return NextResponse.json({ success: true, ...results });
 }
