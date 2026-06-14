@@ -30,16 +30,13 @@ interface IndexResult {
 async function ensureCollection(name: string): Promise<InitResult> {
   try {
     await db.createCollection(name)
-    console.log(`[DB Init] ✅ 创建集合: ${name}`)
     return { collection: name, status: "created", message: "集合已创建" }
   } catch (error: unknown) {
     const errMsg = String(error)
     // CloudBase: 集合已存在时报错
     if (errMsg.includes("already exist") || errMsg.includes("ResourceConflict")) {
-      console.log(`[DB Init] ℹ️  集合已存在: ${name}`)
       return { collection: name, status: "exists", message: "集合已存在" }
     }
-    console.error(`[DB Init] ❌ 创建集合失败: ${name}`, errMsg)
     return { collection: name, status: "error", message: errMsg }
   }
 }
@@ -62,7 +59,6 @@ async function ensureIndex(def: IndexDef): Promise<IndexResult> {
       name: def.name,
       unique: def.unique ?? false,
     })
-    console.log(`[DB Init] ✅ 创建索引: ${def.collection}.${def.name}`)
     return {
       collection: def.collection,
       indexName: def.name,
@@ -72,7 +68,6 @@ async function ensureIndex(def: IndexDef): Promise<IndexResult> {
   } catch (error: unknown) {
     const errMsg = String(error)
     if (errMsg.includes("already exists") || errMsg.includes("IndexOptionsConflict")) {
-      console.log(`[DB Init] ℹ️  索引已存在: ${def.collection}.${def.name}`)
       return {
         collection: def.collection,
         indexName: def.name,
@@ -80,7 +75,6 @@ async function ensureIndex(def: IndexDef): Promise<IndexResult> {
         message: "索引已存在",
       }
     }
-    console.error(`[DB Init] ❌ 创建索引失败: ${def.collection}.${def.name}`, errMsg)
     return {
       collection: def.collection,
       indexName: def.name,

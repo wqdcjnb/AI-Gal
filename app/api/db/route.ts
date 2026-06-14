@@ -12,11 +12,9 @@ const COLLECTION = "test";
 async function ensureCollection(name: string) {
   try {
     await db.createCollection(name);
-    console.log(`[CloudBase] 集合 "${name}" 创建成功`);
   } catch (error: unknown) {
     // 集合已存在时会报错，忽略即可
     if (!String(error).includes("already exist") && !String(error).includes("ResourceConflict")) {
-      console.warn(`[CloudBase] 创建集合 "${name}" 出现异常:`, String(error));
     }
   }
 }

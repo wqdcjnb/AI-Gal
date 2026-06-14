@@ -2,6 +2,91 @@
 /**
  * CloudBase 原生 Auth 服务模块
  *
+ * 腾讯云 API TC3 签名（用于调用 ModifyUser 等管理 API）
+ */
+import crypto from "crypto"
+
+function sha256(data: string): string {
+  return crypto.createHash("sha256").update(data).digest("hex")
+}
+
+function hmacSha256(key: Buffer | string, data: string): Buffer {
+  return crypto.createHmac("sha256", key).update(data).digest()
+}
+
+/** 调用腾讯云 API（TC3-HMAC-SHA256 签名） */
+async function callTencentCloudAPI(
+  action: string,
+  params: Record<string, any>,
+  config: { secretId: string; secretKey: string; region?: string }
+): Promise<any> {
+  const region = config.region || "ap-shanghai"
+  const service = "tcb"
+  const host = "tcb.tencentcloudapi.com"
+  const version = "2018-06-08"
+  const timestamp = Math.floor(Date.now() / 1000)
+  const date = new Date(timestamp * 1000).toISOString().slice(0, 10)
+
+  const body = JSON.stringify(params)
+  const hashedPayload = sha256(body)
+
+  // Step 1: Canonical Request
+  const canonicalHeaders = `content-type:application/json\nhost:${host}\n`
+  const signedHeaders = "content-type;host"
+  const canonicalRequest = [
+    "POST",
+    "/",
+    "",
+    canonicalHeaders,
+    signedHeaders,
+    hashedPayload,
+  ].join("\n")
+
+  // Step 2: String to Sign
+  const credentialScope = `${date}/${service}/tc3_request`
+  const hashedCanonicalRequest = sha256(canonicalRequest)
+  const stringToSign = [
+    "TC3-HMAC-SHA256",
+    String(timestamp),
+    credentialScope,
+    hashedCanonicalRequest,
+  ].join("\n")
+
+  // Step 3: Signature
+  const secretDate = hmacSha256(Buffer.from(`TC3${config.secretKey}`, "utf-8"), date)
+  const secretService = hmacSha256(secretDate, service)
+  const secretSigning = hmacSha256(secretService, "tc3_request")
+  const signature = hmacSha256(secretSigning, stringToSign).toString("hex")
+
+  // Step 4: Authorization header
+  const authorization = `TC3-HMAC-SHA256 Credential=${config.secretId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+
+  // Step 5: Request
+  const url = `https://${host}/`
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Host": host,
+      "X-TC-Action": action,
+      "X-TC-Version": version,
+      "X-TC-Timestamp": String(timestamp),
+      "X-TC-Region": region,
+      "Authorization": authorization,
+    },
+    body,
+  })
+
+  const text = await res.text()
+
+  let result: any
+  try { result = JSON.parse(text) } catch { result = { raw: text } }
+  return { status: res.status, body: result }
+}
+/**
+ * CloudBase 原生 Auth 服务模块
+ *
  * 使用 CloudBase Auth HTTP API 实现：
  * - 邮箱验证码发送（CloudBase 发送真实邮件）
  * - 注册（邮箱 + 密码 + 验证码）
@@ -10,26 +95,28 @@
  *
  * CloudBase Auth API 文档：https://docs.cloudbase.net/api-reference/server/node-sdk/auth
  */
-import app, { db } from "@/lib/cloudbase";
-import { COLLECTIONS } from "@/lib/db-schema";
+import app from "@/lib/cloudbase";
 
 // CloudBase Auth API 基础路径
 const AUTH_API_BASE = "/auth/v1";
 
 // 使用 SDK 内部的 tcbopenapicommonrequester 来发起带签名的请求
-// 这是 CloudBase Node SDK 内部使用的 HTTP 请求模块
 const { request: cloudbaseRequest } = require("@cloudbase/node-sdk/dist/utils/tcbopenapicommonrequester");
+
+// SDK 内部的 tcbapirequester（用于 admin action 类 API 调用）
+const tcbapicaller = require("@cloudbase/node-sdk/dist/utils/tcbapirequester");
 
 interface AuthApiResult {
   statusCode: number;
   body: any;
 }
 
-/** 调用 CloudBase Auth API */
+/** 调用 CloudBase Auth API（使用 admin 凭证签名） */
 async function authApi(
   path: string,
   data: Record<string, any>,
-  accessToken?: string
+  accessToken?: string,
+  method: "POST" | "PATCH" = "POST"
 ): Promise<AuthApiResult> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
@@ -37,7 +124,7 @@ async function authApi(
 
   return cloudbaseRequest({
     config: (app as any).config,
-    method: "POST",
+    method,
     path: `${AUTH_API_BASE}${path}`,
     data,
     headers,
@@ -78,7 +165,6 @@ export async function sendVerificationCode(
     );
 
     if (result.statusCode === 200 && result.body?.verification_id) {
-      console.log(`[CloudBase Auth] 验证码已发送: ${email} (type: ${type})`);
       return {
         success: true,
         verificationId: result.body.verification_id,
@@ -92,7 +178,6 @@ export async function sendVerificationCode(
       message: result.body?.error_description || "发送验证码失败",
     };
   } catch (error: any) {
-    console.error("[CloudBase Auth] 发送验证码失败:", error.message);
     return { success: false, message: "发送验证码失败，请稍后重试" };
   }
 }
@@ -130,7 +215,6 @@ export async function registerUser(
     );
 
     if (result.statusCode === 200 || result.statusCode === 201) {
-      console.log(`[CloudBase Auth] 用户注册成功: ${email}`);
       return {
         success: true,
         username,
@@ -147,7 +231,6 @@ export async function registerUser(
       "注册失败，请重试";
     return { success: false, message: errorMsg };
   } catch (error: any) {
-    console.error("[CloudBase Auth] 注册失败:", error.message);
     return { success: false, message: "注册失败，请稍后重试" };
   }
 }
@@ -167,25 +250,16 @@ export async function loginWithPassword(
   message: string;
 }> {
   try {
-    // 从 users 集合查询注册时生成的 username
-    let username = ""
-    try {
-      const res = await db.collection(COLLECTIONS.USERS).where({ email }).limit(1).get()
-      username = res.data?.[0]?.username || ""
-    } catch { /* users 集合不存在则降级 */ }
-
-    // 降级：查不到 username 时直接尝试 email（兼容旧用户）
-    const loginName = username || email
-
+    // CloudBase Auth /signin 的 username 参数接受 email 作为登录标识
+    // 直接使用 email 登录，避免因注册时自动生成的 username 不匹配导致登录失败
     const adminToken = await getAdminToken();
     const result = await authApi(
       "/signin",
-      { username: loginName, password },
+      { username: email, password },
       adminToken
     );
 
     if (result.statusCode === 200) {
-      console.log(`[CloudBase Auth] 密码登录成功: ${email}`);
       return {
         success: true,
         accessToken: result.body?.access_token,
@@ -201,7 +275,6 @@ export async function loginWithPassword(
       "登录失败，请检查邮箱和密码";
     return { success: false, message: errorMsg };
   } catch (error: any) {
-    console.error("[CloudBase Auth] 密码登录失败:", error.message);
     return { success: false, message: "登录失败，请稍后重试" };
   }
 }
@@ -276,7 +349,6 @@ export async function loginWithCode(
     );
 
     if (result.statusCode === 200) {
-      console.log(`[CloudBase Auth] 验证码登录成功: ${email}`);
       return {
         success: true,
         accessToken: result.body?.access_token,
@@ -292,7 +364,6 @@ export async function loginWithCode(
       "登录失败，请重试";
     return { success: false, message: errorMsg };
   } catch (error: any) {
-    console.error("[CloudBase Auth] 验证码登录失败:", error.message);
     return { success: false, message: "登录失败，请稍后重试" };
   }
 }
@@ -326,6 +397,13 @@ export function parseAccessToken(token: string): {
 
 /**
  * 用户级 Auth API 调用（直接 HTTP，不走 cloudbaseRequest 的 admin 签名）
+ *
+ * CloudBase Auth v1 用户端点域名：
+ *   https://{envId}.api.tcloudbasegateway.com/auth/v1/...
+ *
+ * 常用端点：
+ *   POST /auth/v1/user/reauthenticate  — 重新认证（发送验证码）
+ *   PATCH /auth/v1/user/password        — 修改密码
  */
 async function userAuthApi(
   path: string,
@@ -335,13 +413,8 @@ async function userAuthApi(
 ) {
   const envId = process.env.CLOUDBASE_ENV_ID || (app as any).config?.env || ""
 
-  const url = `https://${envId}.service.tcloudbase.com/auth/v1${path}`
-
-  console.log("========== CloudBase Request ==========")
-  console.log("envId:", envId)
-  console.log("url:", url)
-  console.log("method:", method)
-  console.log("body:", JSON.stringify(data))
+  // CloudBase 用户级 Auth API 使用 api.tcloudbasegateway.com 域名
+  const url = `https://${envId}.api.tcloudbasegateway.com/auth/v1${path}`
 
   const res = await fetch(url, {
     method,
@@ -354,54 +427,162 @@ async function userAuthApi(
 
   const text = await res.text()
 
-  console.log("status:", res.status)
-  console.log("response:", text)
+
+  // 处理空响应（如修改密码成功时 CloudBase 返回空 body）
+  if (!text || text.trim() === "") {
+    return {}
+  }
 
   return JSON.parse(text)
 }
 
 /**
- * 发送重置密码验证码
+ * 验证密码强度
  *
- * POST /auth/v1/user/reauthenticate
- * Authorization: Bearer <user_access_token>
- * Body: { verify_opt: "email_code" }
+ * 返回 validity + 逐项检查结果，供前端展示密码强度指示器。
+ * 硬性要求：至少 6 个字符。推荐：8+ 位、大写、小写、数字、特殊字符。
+ */
+export function validatePasswordStrength(password: string): {
+  valid: boolean
+  message: string
+  checks: { label: string; passed: boolean }[]
+} {
+  const checks = [
+    { label: "至少 6 个字符", passed: password.length >= 6 },
+  ]
+
+  const allPassed = checks.every((c) => c.passed)
+
+  return {
+    valid: allPassed,
+    message: allPassed ? "密码可用" : "密码至少需要 6 个字符",
+    checks,
+  }
+}
+
+/**
+ * 发送修改密码验证码（已登录用户）
  *
- * 返回 verificationId 用于后续修改密码时传递
+ * 从用户的 access_token 中解析邮箱，通过 Admin API 发送验证码到邮箱。
+ * 返回 verificationId 用于后续 modifyPassword。
+ */
+export async function sendPasswordChangeCode(
+  userAccessToken: string
+): Promise<{
+  success: boolean
+  verificationId?: string
+  expiresIn?: number
+  message: string
+}> {
+  try {
+    const parsed = parseAccessToken(userAccessToken)
+    if (!parsed?.email) {
+      return { success: false, message: "无法获取账号邮箱" }
+    }
+    const result = await sendVerificationCode(parsed.email, "signup")
+    if (result.success && result.verificationId) {
+      return {
+        success: true,
+        verificationId: result.verificationId,
+        expiresIn: result.expiresIn || 300,
+        message: "验证码已发送到您的邮箱",
+      }
+    }
+    return { success: false, message: result.message || "发送验证码失败" }
+  } catch (error: any) {
+    return { success: false, message: "发送验证码失败，请稍后重试" }
+  }
+}
+
+/**
+ * 修改用户密码
+ *
+ * 使用腾讯云 TCB API ModifyUser 直接修改密码（管理员权限）。
+ * 此 API 不需要 reauthenticate，不需要 sudo token，
+ * 仅需验证码确认用户拥有邮箱访问权。
+ */
+export async function modifyPassword(
+  userAccessToken: string,
+  newPassword: string,
+  verifyCode: string,
+  verificationId: string
+): Promise<{ success: boolean; message: string }> {
+  const parsed = parseAccessToken(userAccessToken)
+  if (!parsed?.uid) {
+    return { success: false, message: "无法获取用户信息，请重新登录" }
+  }
+
+  const uid = parsed.uid
+  const envId = process.env.CLOUDBASE_ENV_ID || (app as any).config?.env || ""
+  const cfg = (app as any).config || {}
+
+  // Step 1: 验证验证码
+  try {
+    const adminToken = await getAdminToken()
+    const verifyResult = await authApi(
+      "/verification/verify",
+      { verification_id: verificationId, verification_code: verifyCode },
+      adminToken
+    )
+    if (verifyResult.statusCode !== 200 || !verifyResult.body?.verification_token) {
+      const rawMsg = verifyResult.body?.error_description || "验证码错误或已过期"
+      return { success: false, message: rawMsg.replace(/%!\(EXTRA.*?\)/, "").trim() }
+    }
+  } catch (err: any) {
+    return { success: false, message: `验证码校验失败: ${err.message}` }
+  }
+
+  // Step 2: 调用腾讯云 ModifyUser API 修改密码
+  try {
+    const result = await callTencentCloudAPI(
+      "ModifyUser",
+      {
+        EnvId: envId,
+        Uid: uid,
+        Password: newPassword,
+      },
+      {
+        secretId: cfg.secretId || process.env.TENCENTCLOUD_SECRETID || "",
+        secretKey: cfg.secretKey || process.env.TENCENTCLOUD_SECRETKEY || "",
+      }
+    )
+
+    // 检查响应
+    const body = result.body
+    if (result.status === 200 && body?.Response && !body?.Response?.Error) {
+      return { success: true, message: "密码修改成功，请使用新密码重新登录" }
+    }
+
+    const errMsg =
+      body?.Response?.Error?.Message ||
+      body?.Response?.Error?.Code ||
+      JSON.stringify(body)
+    return { success: false, message: errMsg }
+  } catch (err: any) {
+    return { success: false, message: `密码修改失败: ${err.message}` }
+  }
+}
+
+// ============================================================
+// 向后兼容的旧函数
+// ============================================================
+
+/**
+ * @deprecated 请使用 sendPasswordChangeCode(userAccessToken) 代替
  */
 export async function sendResetPasswordCode(email: string) {
   return sendVerificationCode(email, "signup")
 }
 
 /**
- * 修改密码
- *
- * PATCH /auth/v1/user/password
- * Authorization: Bearer <user_access_token>
- * Body: { new_password, confirm_password, verify_code, verification_id? }
+ * @deprecated 请使用 modifyPassword(userAccessToken, newPassword, verifyCode, verificationId) 代替
  */
 export async function resetPassword(
   userAccessToken: string,
   newPassword: string,
   verifyCode: string
 ): Promise<{ success: boolean; message: string }> {
-  try {
-    const resBody = await userAuthApi(
-      "/user/password",
-      { new_password: newPassword, confirm_password: newPassword, verify_code: verifyCode },
-      userAccessToken,
-      "PATCH"
-    )
-    if (!resBody?.error_description && !resBody?.error) {
-      return { success: true, message: "密码修改成功" }
-    }
-    return {
-      success: false,
-      message: resBody?.error_description || resBody?.error || "密码修改失败",
-    }
-  } catch (error: any) {
-    return { success: false, message: error.message || "密码修改失败" }
-  }
+  return modifyPassword(userAccessToken, newPassword, verifyCode, "")
 }
 
 /**

@@ -292,7 +292,7 @@ export function AuthDialog({
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="密码（至少6位）"
+                  placeholder="密码"
                   className="w-full h-10 pl-10 pr-4 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
                 />
               </div>
@@ -300,16 +300,40 @@ export function AuthDialog({
 
             {/* Confirm password (register only) */}
             {mode === "register" && (
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="确认密码"
-                  className="w-full h-10 pl-10 pr-4 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
-                />
-              </div>
+              <>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="确认密码"
+                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
+                  />
+                </div>
+                {confirmPassword && password !== confirmPassword && (
+                  <p className="text-xs text-red-500 -mt-2">两次输入的密码不一致</p>
+                )}
+                {/* 密码强度指示器 */}
+                {password.length > 0 && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs -mt-1">
+                    {[
+                      { label: "≥6 位", ok: password.length >= 6 },
+                      { label: "大写字母", ok: /[A-Z]/.test(password) },
+                      { label: "小写字母", ok: /[a-z]/.test(password) },
+                      { label: "数字", ok: /[0-9]/.test(password) },
+                      { label: "特殊字符", ok: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password) },
+                    ].map((check) => (
+                      <span
+                        key={check.label}
+                        className={check.ok ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}
+                      >
+                        {check.ok ? "✓" : "○"} {check.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Send code button / Code input */}

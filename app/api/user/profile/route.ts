@@ -91,7 +91,6 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error("[User Profile] GET 失败:", error)
     return NextResponse.json(
       { success: false, message: "获取用户信息失败" },
       { status: 500 }
@@ -152,7 +151,6 @@ export async function PATCH(request: Request) {
       data: { nickname: trimmed },
     })
   } catch (error) {
-    console.error("[User Profile] PATCH 失败:", error)
     return NextResponse.json(
       { success: false, message: "更新昵称失败，请稍后重试" },
       { status: 500 }

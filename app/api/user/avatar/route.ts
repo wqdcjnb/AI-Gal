@@ -41,11 +41,9 @@ async function deleteOldAvatar(fileId: string): Promise<void> {
     const result = await cloudbaseApp.deleteFile({ fileList: [fileId] })
     const status = result.fileList?.[0]
     if (status && status.code !== "SUCCESS") {
-      console.warn("[Avatar] 删除旧头像文件失败:", status)
     }
   } catch (error) {
     // 删除失败不阻塞上传流程
-    console.warn("[Avatar] 删除旧头像异常:", error)
   }
 }
 
@@ -146,7 +144,6 @@ export async function POST(request: Request) {
       message: "头像上传成功",
     })
   } catch (error) {
-    console.error("[Avatar] 上传失败:", error)
     return NextResponse.json(
       { success: false, message: "头像上传失败，请稍后重试" },
       { status: 500 }

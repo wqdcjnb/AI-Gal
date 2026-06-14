@@ -59,6 +59,7 @@ export default function ProfilePage() {
   const [passwordStep, setPasswordStep] = useState<"idle" | "code-sent">("idle")
   const [sendingCode, setSendingCode] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [verificationId, setVerificationId] = useState("")
   const [passwordCode, setPasswordCode] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -230,6 +231,7 @@ export default function ProfilePage() {
     setSendingCode(true)
     setPasswordMsg("")
     setPasswordMsgOk(false)
+    setVerificationId("")
     try {
       const res = await fetch("/api/user/password", {
         method: "POST",
@@ -237,7 +239,8 @@ export default function ProfilePage() {
         body: JSON.stringify({ action: "send-code" }),
       })
       const data = await res.json()
-      if (data.success) {
+      if (data.success && data.verificationId) {
+        setVerificationId(data.verificationId)
         setPasswordStep("code-sent")
         setPasswordMsg("验证码已发送到您的邮箱，请查收")
         setPasswordMsgOk(true)
@@ -267,6 +270,11 @@ export default function ProfilePage() {
       setPasswordMsgOk(false)
       return
     }
+    if (!verificationId) {
+      setPasswordMsg("验证会话已过期，请重新发送验证码")
+      setPasswordMsgOk(false)
+      return
+    }
 
     setChangingPassword(true)
     setPasswordMsg("")
@@ -278,6 +286,7 @@ export default function ProfilePage() {
           action: "reset",
           code: passwordCode,
           password: newPassword,
+          verificationId,
         }),
       })
       const data = await res.json()
@@ -286,8 +295,13 @@ export default function ProfilePage() {
         setPasswordCode("")
         setNewPassword("")
         setConfirmPassword("")
-        setPasswordMsg("密码修改成功")
+        setVerificationId("")
+        setPasswordMsg("密码修改成功，即将跳转到首页...")
         setPasswordMsgOk(true)
+        // 密码修改后 cookie 已清除，刷新页面触发重新登录
+        setTimeout(() => {
+          window.location.href = "/"
+        }, 2000)
       } else {
         setPasswordMsg(data.message || "修改失败")
         setPasswordMsgOk(false)
@@ -566,8 +580,26 @@ export default function ProfilePage() {
                     setNewPassword(e.target.value)
                     setPasswordMsg("")
                   }}
-                  placeholder="输入新密码（至少 6 位）"
+                  placeholder="输入新密码"
                 />
+                {newPassword.length > 0 && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    {[
+                      { label: "≥6 位", ok: newPassword.length >= 6 },
+                      { label: "大写字母", ok: /[A-Z]/.test(newPassword) },
+                      { label: "小写字母", ok: /[a-z]/.test(newPassword) },
+                      { label: "数字", ok: /[0-9]/.test(newPassword) },
+                      { label: "特殊字符", ok: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(newPassword) },
+                    ].map((check) => (
+                      <span
+                        key={check.label}
+                        className={check.ok ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}
+                      >
+                        {check.ok ? "✓" : "○"} {check.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>确认新密码</Label>
@@ -583,6 +615,9 @@ export default function ProfilePage() {
                     if (e.key === "Enter") handleChangePassword()
                   }}
                 />
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <p className="text-xs text-red-500">两次输入的密码不一致</p>
+                )}
               </div>
               <Button
                 onClick={handleChangePassword}

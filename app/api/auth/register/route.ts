@@ -3,7 +3,7 @@
  * 注册：邮箱 + 密码 + 验证码 → CloudBase Auth 创建用户
  * Body: { email, password, verificationCode, verificationId }
  */
-import { registerUser } from "@/lib/cloudbase-auth";
+import { registerUser, validatePasswordStrength } from "@/lib/cloudbase-auth";
 import { db } from "@/lib/cloudbase";
 import { COLLECTIONS } from "@/lib/db-schema";
 import { cookies } from "next/headers";
@@ -24,9 +24,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (password.length < 6) {
+    const strength = validatePasswordStrength(password)
+    if (!strength.valid) {
       return NextResponse.json(
-        { success: false, message: "密码至少需要 6 个字符" },
+        { success: false, message: strength.message },
         { status: 400 }
       );
     }

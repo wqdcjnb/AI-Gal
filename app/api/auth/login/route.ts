@@ -5,7 +5,7 @@
  * 密码登录: { email, password, type: "password" }
  * 验证码登录: { email, verificationCode, verificationId, type: "code" }
  */
-import { loginWithPassword, loginWithCode } from "@/lib/cloudbase-auth";
+import { loginWithPassword, loginWithCode, validatePasswordStrength } from "@/lib/cloudbase-auth";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -50,6 +50,13 @@ export async function POST(request: Request) {
       if (!password) {
         return NextResponse.json(
           { success: false, message: "请输入密码" },
+          { status: 400 }
+        );
+      }
+      const strength = validatePasswordStrength(password)
+      if (!strength.valid) {
+        return NextResponse.json(
+          { success: false, message: strength.message },
           { status: 400 }
         );
       }
