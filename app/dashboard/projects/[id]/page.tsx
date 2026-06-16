@@ -40,7 +40,7 @@ export default function ProjectBasicInfo() {
   const project = getProject(projectId)
   const [name, setName] = useState(project?.name || "")
   const [description, setDescription] = useState(project?.description || "")
-  const [category, setCategory] = useState<GameCategory>(project?.category || "校园")
+  const [tags, setTags] = useState<GameCategory[]>(project?.tags || [])
   const [storyLength, setStoryLength] = useState<StoryLength>(project?.storyLength || "短篇")
   const [coverUrl, setCoverUrl] = useState(project?.coverUrl || "")
   const [worldSetting, setWorldSetting] = useState(project?.worldSetting || "")
@@ -51,7 +51,7 @@ export default function ProjectBasicInfo() {
       setName(project.name)
       setDescription(project.description)
       setCoverUrl(project.coverUrl || "")
-      setCategory(project.category)
+      setTags(project.tags || [])
       setStoryLength(project.storyLength)
       setWorldSetting(project.worldSetting)
     }
@@ -63,7 +63,7 @@ export default function ProjectBasicInfo() {
       name: name.trim(),
       description,
       coverUrl,
-      category,
+      tags,
       storyLength,
       worldSetting,
       currentStep: 1,
@@ -101,13 +101,20 @@ export default function ProjectBasicInfo() {
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>分类</Label>
-                <Select value={category} onValueChange={(v: string) => setCategory(v as GameCategory)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>游戏标签</Label>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((cat) => {
+                    const selected = tags.includes(cat)
+                    return (
+                      <button key={cat} type="button"
+                        onClick={() => setTags(selected ? tags.filter((t) => t !== cat) : [...tags, cat])}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                          selected ? "bg-purple-500 text-white border-purple-500" : "bg-background text-muted-foreground border-border hover:border-purple-500/50"
+                        }`}
+                      >{cat}</button>
+                    )
+                  })}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>篇幅</Label>

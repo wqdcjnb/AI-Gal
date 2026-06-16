@@ -52,7 +52,7 @@ export function ProjectLayout({ children }: ProjectLayoutProps) {
               {currentProject.name}
             </h1>
             <p className="text-xs text-muted-foreground">
-              {currentProject.category} · {currentProject.storyLength}
+              {(currentProject.tags || [])[0]} · {currentProject.storyLength}
             </p>
           </div>
         </div>

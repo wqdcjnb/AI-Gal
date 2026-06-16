@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 已登录状态下访问首页 → 自动跳转 Dashboard
   useEffect(() => {
     if (!loading && user && pathname === "/") {
-      router.replace("/dashboard");
+      router.replace("/dashboard/projects");
     }
   }, [loading, user, pathname, router]);
 
@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 网络异常降级
         setUser({ email, nickname: email.split("@")[0], avatarUrl: "" });
       }
-      router.push("/dashboard");
+      router.push("/dashboard/projects");
     },
     [router]
   );

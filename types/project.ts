@@ -50,7 +50,7 @@ export interface Project {
   name: string
   description: string
   coverUrl: string
-  category: GameCategory
+  tags: GameCategory[]
   storyLength: StoryLength
   worldSetting: string
   currentStep: number // 1-6
@@ -171,9 +171,51 @@ export interface PublicWork {
   projectName: string
   authorName: string
   coverUrl: string
-  category: GameCategory
+  tags: GameCategory[]
   description: string
   previewUrl?: string
   likes: number
   publishedAt: string
+}
+
+// ============================================================
+// 章节工作台 — 每章的 AI 资产描述
+// ============================================================
+
+export interface AssetCharacter {
+  name: string
+  role: string
+  spriteDesc: string       // AI 生成的立绘文字描述
+  generatedUrl?: string    // 生成立绘后的 URL
+  generating?: boolean
+}
+
+export interface AssetBackground {
+  scene: string
+  desc: string
+  generatedUrl?: string
+  generating?: boolean
+}
+
+export interface AssetBgm {
+  mood: string
+  desc: string
+  generatedUrl?: string
+  generating?: boolean
+}
+
+export interface AssetCg {
+  trigger: string
+  desc: string
+  generatedUrl?: string
+  generating?: boolean
+}
+
+export interface ChapterAssets {
+  chapterId: string
+  chapterTitle: string
+  characters: AssetCharacter[]
+  backgrounds: AssetBackground[]
+  bgm: AssetBgm[]
+  cg: AssetCg[]
 }

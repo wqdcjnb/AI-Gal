@@ -23,7 +23,7 @@ const mockWorks: PublicWork[] = [
     projectName: "夏日幻梦",
     authorName: "创作者小明",
     coverUrl: "",
-    category: "校园",
+    tags: ["校园"],
     description: "一个发生在夏日校园的青春恋爱故事，多条分支，多个结局。",
     likes: 1280,
     publishedAt: "2026-05-20",
@@ -33,7 +33,7 @@ const mockWorks: PublicWork[] = [
     projectName: "异世界冒险录",
     authorName: "幻想者",
     coverUrl: "",
-    category: "异世界",
+    tags: ["异世界"],
     description: "被召唤到异世界的高中生展开的冒险传奇。",
     likes: 956,
     publishedAt: "2026-06-01",
@@ -43,7 +43,7 @@ const mockWorks: PublicWork[] = [
     projectName: "深夜迷案",
     authorName: "推理爱好者",
     coverUrl: "",
-    category: "悬疑",
+    tags: ["悬疑"],
     description: "都市深夜的连环案件，你能揭开真相吗？",
     likes: 723,
     publishedAt: "2026-04-15",
@@ -53,7 +53,7 @@ const mockWorks: PublicWork[] = [
     projectName: "江南烟雨录",
     authorName: "古风写手",
     coverUrl: "",
-    category: "古风",
+    tags: ["古风"],
     description: "大楚王朝下的才子佳人故事，一曲琵琶诉不尽天下兴亡。",
     likes: 1456,
     publishedAt: "2026-03-10",
@@ -63,7 +63,7 @@ const mockWorks: PublicWork[] = [
     projectName: "星辰之约",
     authorName: "星空旅人",
     coverUrl: "",
-    category: "恋爱",
+    tags: ["恋爱"],
     description: "在樱花盛开的季节，命运将两人紧紧相连。",
     likes: 892,
     publishedAt: "2026-06-05",
@@ -73,7 +73,7 @@ const mockWorks: PublicWork[] = [
     projectName: "日常咖啡屋",
     authorName: "咖啡与猫",
     coverUrl: "",
-    category: "日常",
+    tags: ["日常"],
     description: "在小城咖啡店里发生的温暖日常，治愈系 Galgame。",
     likes: 567,
     publishedAt: "2026-05-28",
@@ -92,7 +92,7 @@ export default function GalleryPage() {
       w.projectName.toLowerCase().includes(search.toLowerCase()) ||
       w.authorName.toLowerCase().includes(search.toLowerCase()) ||
       w.description.toLowerCase().includes(search.toLowerCase())
-    const matchCategory = activeCategory === "全部" || w.category === activeCategory
+    const matchCategory = activeCategory === "全部" || (w.tags || []).includes(activeCategory)
     return matchSearch && matchCategory
   })
 
@@ -169,7 +169,7 @@ export default function GalleryPage() {
                   </div>
                   {/* Category badge */}
                   <Badge className="absolute top-3 left-3 text-[10px] bg-background/80 backdrop-blur-sm border-none">
-                    {work.category}
+                    {work.tags?.[0] || ""}
                   </Badge>
                 </div>
 

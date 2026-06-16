@@ -10,11 +10,6 @@ import {
   UserCircle,
   Camera,
   Lock,
-  History,
-  Heart,
-  Download,
-  FileArchive,
-  Eye,
   Loader2,
   CheckCircle2,
   AlertCircle,
@@ -23,17 +18,6 @@ import {
 const ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"]
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024 // 5MB
 
-const mockExportRecords = [
-  { id: "e-1", project: "夏日幻梦", date: "2026-06-12", size: "24.5 MB" },
-  { id: "e-2", project: "夏日幻梦", date: "2026-06-10", size: "22.1 MB" },
-  { id: "e-3", project: "异世界冒险录", date: "2026-06-05", size: "18.3 MB" },
-]
-
-const mockFavorites = [
-  { id: "f-1", name: "江南烟雨录", author: "古风写手", category: "古风" },
-  { id: "f-2", name: "星辰之约", author: "星空旅人", category: "恋爱" },
-  { id: "f-3", name: "深夜迷案", author: "推理爱好者", category: "悬疑" },
-]
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth()
@@ -654,73 +638,6 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* 导出记录 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <History className="h-4 w-4 text-purple-500" />
-            导出记录
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {mockExportRecords.map((record) => (
-              <div
-                key={record.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border"
-              >
-                <div className="flex items-center gap-3">
-                  <FileArchive className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">{record.project}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {record.date} · {record.size}
-                    </p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm">
-                  <Download className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 收藏作品 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Heart className="h-4 w-4 text-purple-500" />
-            收藏作品
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {mockFavorites.map((fav) => (
-              <div
-                key={fav.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent transition-colors"
-              >
-                <div>
-                  <p className="text-sm font-medium">{fav.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {fav.author} · {fav.category}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <Heart className="h-4 w-4 text-red-500" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

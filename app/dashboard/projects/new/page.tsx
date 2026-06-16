@@ -49,34 +49,45 @@ export default function NewProjectPage() {
 
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const [category, setCategory] = useState<GameCategory>("校园")
+  const [tags, setTags] = useState<GameCategory[]>([])
   const [storyLength, setStoryLength] = useState<StoryLength>("短篇")
   const [coverUrl, setCoverUrl] = useState("")
   const [worldSetting, setWorldSetting] = useState("")
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const handleGenerateWorldSetting = async () => {
-    if (!name) return
+  const handleGenerateOutline = async () => {
+    if (!name || !description) return
     setGenerating(true)
-    // 模拟 AI 生成世界观
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    const mockSettings: Record<string, string> = {
-      校园: "故事发生在一所临海小镇的私立高中。夏日的海风吹拂着校园的每一个角落，樱花树下的约定，天台上的秘密，放学后的社团活动……青春的故事在这里悄然展开。",
-      奇幻: "在这片名为「艾尔兰蒂亚」的大陆上，魔法与剑术并存。龙族盘踞在北方山脉，精灵隐居在翡翠森林，而人类则在平原上建立起繁荣的王国。一场席卷大陆的风暴即将来临……",
-      悬疑: "深夜的都市，霓虹灯下隐藏着不为人知的秘密。一桩离奇的案件将几个陌生人的命运交织在一起。每个人都有自己的过去，而真相远比想象中更加黑暗。",
-      异世界: "平凡的高中生在某天被召唤到了异世界。这里有着与地球完全不同的法则，冒险者公会、魔法学院、魔兽森林……在寻找回家之路的同时，一段传奇冒险就此展开。",
-      日常: "这是一座安静的小城，没有惊天动地的大事件，却有温暖人心的日常。咖啡店的香气、图书馆的静谧、公园里的相遇……平凡的日子因为与你的交集而变得特别。",
-      科幻: "公元 2157 年，人类已经迈入星际殖民时代。人工智能、基因改造、意识上传成为日常。在巨型空间站「新伊甸」上，一场关乎人类未来的抉择即将展开。",
-      恋爱: "樱花盛开的季节，命运的齿轮悄然转动。在错过的地铁站、偶然的图书馆、雨中的公园，每一次相遇都是巧合还是必然？这是一段关于爱与成长的故事。",
-      古风: "江南烟雨，长安繁华。在这个架空的大楚王朝，才子佳人、江湖侠客、朝堂风云交织成一幅壮丽的画卷。一曲琵琶诉不尽天下兴亡，一纸书信道不完儿女情长。",
+    try {
+      const res = await fetch("/api/ai/outline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setWorldSetting(data.outline)
+      }
+    } catch {
+      // 失败时保持当前内容，不做替换
+    } finally {
+      setGenerating(false)
     }
-    setWorldSetting(mockSettings[category] || mockSettings["校园"])
-    setGenerating(false)
   }
 
+  // 保留旧函数名兼容
+  const handleGenerateWorldSetting = handleGenerateOutline
+
   const handleSave = async () => {
-    if (!name.trim()) return
+    const errs: Record<string, string> = {}
+    if (!name.trim()) errs.name = "请输入游戏名称"
+    if (!description.trim()) errs.description = "请输入游戏简介"
+    if (tags.length === 0) errs.tags = "请至少选择一个标签"
+    if (!worldSetting.trim()) errs.worldSetting = "请输入大纲设定"
+    if (Object.keys(errs).length > 0) { setErrors(errs); return }
+    setErrors({})
     setSaving(true)
     // 创建项目并跳转
     const project = createProject()
@@ -84,12 +95,12 @@ export default function NewProjectPage() {
       name: name.trim(),
       description,
       coverUrl,
-      category,
+      tags,
       storyLength,
       worldSetting,
       currentStep: 1,
     })
-    router.push(`/dashboard/projects/${project.id}`)
+    router.push(`/dashboard/projects/${project.id}/chapters`)
   }
 
   return (
@@ -103,7 +114,7 @@ export default function NewProjectPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">新建项目</h1>
+          <h1 className="text-xl font-semibold tracking-tight">新建游戏</h1>
           <p className="text-sm text-muted-foreground">步骤 1/6 · 项目基础配置</p>
         </div>
       </div>
@@ -129,13 +140,14 @@ export default function NewProjectPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>简介</Label>
+              <Label>简介 *</Label>
               <Textarea
                 placeholder="简单介绍一下你的故事..."
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => { setDescription(e.target.value); setErrors((p) => ({ ...p, description: "" })) }}
                 rows={2}
               />
+              {errors.description && <p className="text-xs text-red-500">{errors.description}</p>}
             </div>
 
             <div className="space-y-2">
@@ -149,19 +161,27 @@ export default function NewProjectPage() {
 
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>游戏分类</Label>
-                <Select value={category} onValueChange={(v: string) => setCategory(v as GameCategory)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
+                <Label>游戏标签 *（可多选）</Label>
+                {errors.tags && <p className="text-xs text-red-500">{errors.tags}</p>}
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((cat) => {
+                    const selected = tags.includes(cat)
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => { setTags(selected ? tags.filter((t) => t !== cat) : [...tags, cat]); setErrors((p) => ({ ...p, tags: "" })) }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                          selected
+                            ? "bg-purple-500 text-white border-purple-500"
+                            : "bg-background text-muted-foreground border-border hover:border-purple-500/50"
+                        }`}
+                      >
                         {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -188,36 +208,37 @@ export default function NewProjectPage() {
           </CardContent>
         </Card>
 
-        {/* 世界观设定 */}
+        {/* 大纲设定 */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <BookOpen className="h-4 w-4 text-purple-500" />
-              世界观设定
+              大纲设定
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Textarea
-              placeholder="描述你的故事世界观，或使用 AI 自动生成..."
+              placeholder="描述你的故事大纲，或使用 AI 自动生成..."
               value={worldSetting}
-              onChange={(e) => setWorldSetting(e.target.value)}
+              onChange={(e) => { setWorldSetting(e.target.value); setErrors((p) => ({ ...p, worldSetting: "" })) }}
               rows={5}
             />
+            {errors.worldSetting && <p className="text-xs text-red-500 mt-1">{errors.worldSetting}</p>}
             <Button
               variant="outline"
               onClick={handleGenerateWorldSetting}
-              disabled={generating || !name}
+              disabled={generating || !name.trim() || !description.trim() || tags.length === 0}
               className="w-full"
             >
               {generating ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  AI 正在构思世界观...
+                  AI 正在构思大纲...
                 </>
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 text-purple-500" />
-                  AI 生成世界观设定
+                  AI 生成大纲设定
                 </>
               )}
             </Button>
@@ -231,7 +252,7 @@ export default function NewProjectPage() {
           </Button>
           <Button
             onClick={handleSave}
-            disabled={!name.trim() || saving}
+            disabled={!name.trim() || !description.trim() || tags.length === 0 || !worldSetting.trim() || saving}
             className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-none"
           >
             {saving ? (
@@ -242,7 +263,7 @@ export default function NewProjectPage() {
             ) : (
               <>
                 <Sparkles className="h-4 w-4" />
-                保存并开始创作
+                保存并制作
               </>
             )}
           </Button>
