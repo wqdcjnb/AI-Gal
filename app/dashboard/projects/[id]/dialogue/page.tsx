@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { ProjectLayout } from "@/components/project/project-layout"
 import { Card } from "@/components/ui/card"
@@ -28,6 +28,9 @@ import {
   Image,
   Music,
   GitMerge,
+  Play,
+  Pause,
+  Volume2,
 } from "lucide-react"
 import Link from "next/link"
 import type { ToneType } from "@/types/project"
@@ -97,6 +100,13 @@ export default function DialoguePage() {
   const [generating, setGenerating] = useState(false)
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null)
 
+  // 配音相关
+  interface VoiceCharData { voiceStyle: string; voiceLanguage: string; voiceName?: string; voicePreviewUrl?: string }
+  const [voiceConfigs, setVoiceConfigs] = useState<Record<string, VoiceCharData>>({})
+  const [voiceGenerating, setVoiceGenerating] = useState<string | null>(null)
+  const [voicePlaying, setVoicePlaying] = useState<string | null>(null)
+  const [voiceAudio, setVoiceAudio] = useState<HTMLAudioElement | null>(null)
+
   const handleGenerateAll = async () => {
     setGenerating(true)
     await new Promise((r) => setTimeout(r, 2000))
@@ -147,6 +157,65 @@ export default function DialoguePage() {
     setLines((prev) => [...prev, newLine])
   }
 
+  // ============================================================
+  // 配音相关
+  // ============================================================
+
+  // 提取当前对话中所有角色名（dialogue 类型行的 characterName）
+  const dialogueChars = [...new Set(lines.filter((l) => l.type === "dialogue" && l.characterName).map((l) => l.characterName!))]
+
+  const getVoiceConfig = (name: string): VoiceCharData => voiceConfigs[name] || { voiceStyle: "", voiceLanguage: "中" }
+
+  const updateVoiceConfig = (name: string, patch: Partial<VoiceCharData>) => {
+    setVoiceConfigs((prev) => ({ ...prev, [name]: { ...getVoiceConfig(name), ...patch } }))
+  }
+
+  const handleDesignVoice = async (charName: string) => {
+    const cfg = getVoiceConfig(charName)
+    if (!cfg.voiceStyle) return
+    setVoiceGenerating(charName)
+    const langPrompts: Record<string, string> = {
+      "中": `${cfg.voiceStyle}，说中文`,
+      "日": `${cfg.voiceStyle}，日本語を話す`,
+      "英": `${cfg.voiceStyle}, speaking in English`,
+    }
+    const previewTexts: Record<string, string> = {
+      "中": `你好，我是${charName}`,
+      "日": `こんにちは、私は${charName}です`,
+      "英": `Hello, I am ${charName}`,
+    }
+    const lang = cfg.voiceLanguage || "中"
+    try {
+      const res = await fetch("/api/ai/voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "design", prompt: langPrompts[lang], previewText: previewTexts[lang], name: `${charName}_voice` }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        updateVoiceConfig(charName, { voiceName: data.voiceName, voicePreviewUrl: data.audioUrl })
+      }
+    } catch (err) { console.error("Voice design error:", err) }
+    finally { setVoiceGenerating(null) }
+  }
+
+  const handlePreviewVoice = (charName: string) => {
+    const cfg = getVoiceConfig(charName)
+    if (!cfg.voicePreviewUrl) return
+    if (voiceAudio) { voiceAudio.pause(); setVoiceAudio(null); setVoicePlaying(null) }
+    if (voicePlaying === charName) { setVoicePlaying(null); return }
+    const audio = new Audio(cfg.voicePreviewUrl)
+    audio.onended = () => { setVoicePlaying(null); setVoiceAudio(null) }
+    audio.onerror = () => { setVoicePlaying(null); setVoiceAudio(null) }
+    audio.play().catch(console.error)
+    setVoiceAudio(audio)
+    setVoicePlaying(charName)
+  }
+
+  useEffect(() => {
+    return () => { if (voiceAudio) voiceAudio.pause() }
+  }, [])
+
   return (
     <ProjectLayout>
       <div className="flex gap-4">
@@ -168,6 +237,68 @@ export default function DialoguePage() {
               </button>
             ))}
           </div>
+
+          {/* 配音管理 */}
+          {dialogueChars.length > 0 && (
+            <div className="pt-2 border-t space-y-2">
+              <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                <Volume2 className="h-3.5 w-3.5 text-purple-500" />配音管理
+              </h3>
+              {dialogueChars.map((charName) => {
+                const cfg = getVoiceConfig(charName)
+                const isGen = voiceGenerating === charName
+                const isPlay = voicePlaying === charName
+                return (
+                  <div key={charName} className="space-y-1.5 p-2 rounded-lg border border-border/50 bg-muted/20">
+                    <p className="text-xs font-medium truncate">{charName}</p>
+                    <Input
+                      value={cfg.voiceStyle}
+                      onChange={(e) => updateVoiceConfig(charName, { voiceStyle: e.target.value })}
+                      className="h-7 text-[11px]"
+                      placeholder="配音风格，如：温柔的少女音..."
+                    />
+                    <div className="flex items-center gap-1">
+                      {/* 语言选择 */}
+                      <div className="flex rounded border border-border overflow-hidden shrink-0">
+                        {(["中", "日", "英"] as const).map((lang) => (
+                          <button
+                            key={lang}
+                            onClick={() => updateVoiceConfig(charName, { voiceLanguage: lang })}
+                            className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                              (cfg.voiceLanguage || "中") === lang ? "bg-purple-500 text-white" : "bg-transparent hover:bg-accent"
+                            }`}
+                          >{lang}</button>
+                        ))}
+                      </div>
+                      {/* 生成按钮 */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 shrink-0 ml-auto"
+                        onClick={() => handleDesignVoice(charName)}
+                        disabled={!cfg.voiceStyle || isGen}
+                        title="AI 生成声型"
+                      >
+                        {isGen ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      </Button>
+                      {/* 播放按钮 */}
+                      {cfg.voiceName && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 shrink-0"
+                          onClick={() => handlePreviewVoice(charName)}
+                          title={isPlay ? "停止" : "试听"}
+                        >
+                          {isPlay ? <Pause className="h-3 w-3 text-purple-500" /> : <Play className="h-3 w-3 text-purple-500" />}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Center: Dialogue Editor */}

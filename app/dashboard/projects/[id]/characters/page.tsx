@@ -37,6 +37,10 @@ import {
   ChevronRight,
   Palette,
   Mic,
+  Play,
+  Pause,
+  Lock,
+  Volume2,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -50,6 +54,8 @@ interface MockCharacter {
   position: string
   colorNote: string
   voiceStyle: string
+  voiceName?: string      // designVoice 返回的固定声型ID，一旦设置则声型锁定
+  voicePreviewUrl?: string // 生成时的试听音频（base64）
   sprites: { type: string; expression: string; url: string }[]
 }
 
@@ -100,6 +106,11 @@ export default function CharactersPage() {
   const [showNewDialog, setShowNewDialog] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [newChar, setNewChar] = useState({ name: "", identity: "", tags: "" })
+
+  // 配音相关状态
+  const [voiceGenerating, setVoiceGenerating] = useState<string | null>(null) // charId
+  const [voicePlaying, setVoicePlaying] = useState<string | null>(null) // charId
+  const [voiceAudio, setVoiceAudio] = useState<HTMLAudioElement | null>(null)
 
   const handleGenerateCharacter = async () => {
     if (!newChar.name) return
@@ -165,6 +176,89 @@ export default function CharactersPage() {
     }
   }
 
+  // ============================================================
+  // 配音相关
+  // ============================================================
+
+  const handleDesignVoice = async (charId: string) => {
+    const char = characters.find((c) => c.id === charId)
+    if (!char || !char.voiceStyle) return
+
+    setVoiceGenerating(charId)
+    try {
+      const res = await fetch("/api/ai/voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "design",
+          prompt: char.voiceStyle,
+          previewText: `你好，我是${char.name}`,
+          name: `${char.name}_voice`,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        const updated = characters.map((c) =>
+          c.id === charId
+            ? { ...c, voiceName: data.voiceName, voicePreviewUrl: data.audioUrl }
+            : c
+        )
+        setCharacters(updated)
+        setSelectedChar((prev) =>
+          prev?.id === charId
+            ? { ...prev, voiceName: data.voiceName, voicePreviewUrl: data.audioUrl }
+            : prev
+        )
+      } else {
+        console.error("Voice design failed:", data.message)
+      }
+    } catch (err) {
+      console.error("Voice design error:", err)
+    } finally {
+      setVoiceGenerating(null)
+    }
+  }
+
+  const handlePreviewVoice = (charId: string) => {
+    const char = characters.find((c) => c.id === charId)
+    if (!char?.voicePreviewUrl) return
+
+    // 停止当前播放
+    if (voiceAudio) {
+      voiceAudio.pause()
+      setVoiceAudio(null)
+      setVoicePlaying(null)
+    }
+
+    // 如果已经在播放同一个，则停止
+    if (voicePlaying === charId) {
+      setVoicePlaying(null)
+      return
+    }
+
+    const audio = new Audio(char.voicePreviewUrl)
+    audio.onended = () => {
+      setVoicePlaying(null)
+      setVoiceAudio(null)
+    }
+    audio.onerror = () => {
+      setVoicePlaying(null)
+      setVoiceAudio(null)
+    }
+    audio.play().catch(console.error)
+    setVoiceAudio(audio)
+    setVoicePlaying(charId)
+  }
+
+  // 停止播放（切换角色或卸载时）
+  const stopVoice = () => {
+    if (voiceAudio) {
+      voiceAudio.pause()
+      setVoiceAudio(null)
+      setVoicePlaying(null)
+    }
+  }
+
   return (
     <ProjectLayout>
       <div className="flex gap-6">
@@ -180,7 +274,7 @@ export default function CharactersPage() {
             {characters.map((char) => (
               <button
                 key={char.id}
-                onClick={() => setSelectedChar(char)}
+                onClick={() => { stopVoice(); setSelectedChar(char) }}
                 className={`w-full text-left p-3 rounded-lg text-sm transition-colors ${
                   selectedChar?.id === char.id
                     ? "bg-foreground text-background"
@@ -288,20 +382,128 @@ export default function CharactersPage() {
                       <Label className="text-xs flex items-center gap-1">
                         <Mic className="h-3 w-3" /> 配音风格
                       </Label>
-                      <Input
-                        value={selectedChar.voiceStyle}
-                        onChange={(e) => {
-                          const updated = characters.map((c) =>
-                            c.id === selectedChar.id ? { ...c, voiceStyle: e.target.value } : c
-                          )
-                          setCharacters(updated)
-                          setSelectedChar((prev) => (prev ? { ...prev, voiceStyle: e.target.value } : null))
-                        }}
-                        className="h-8 text-xs"
-                        placeholder="温柔少女音..."
-                      />
+                      {selectedChar.voiceName ? (
+                        <div className="flex items-center gap-1.5 h-8 px-2 rounded-md border border-purple-500/30 bg-purple-500/5">
+                          <Lock className="h-3 w-3 text-purple-500 shrink-0" />
+                          <span className="text-xs text-muted-foreground truncate">{selectedChar.voiceStyle}</span>
+                        </div>
+                      ) : (
+                        <Input
+                          value={selectedChar.voiceStyle}
+                          onChange={(e) => {
+                            const updated = characters.map((c) =>
+                              c.id === selectedChar.id ? { ...c, voiceStyle: e.target.value } : c
+                            )
+                            setCharacters(updated)
+                            setSelectedChar((prev) => (prev ? { ...prev, voiceStyle: e.target.value } : null))
+                          }}
+                          className="h-8 text-xs"
+                          placeholder="温柔少女音..."
+                        />
+                      )}
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* 配音管理 */}
+              <Card>
+                <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Volume2 className="h-4 w-4 text-purple-500" />
+                    配音管理
+                  </CardTitle>
+                  {selectedChar.voiceName && (
+                    <Badge variant="secondary" className="text-[11px] gap-1">
+                      <Lock className="h-3 w-3" />
+                      声型已锁定
+                    </Badge>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {/* 声型状态提示 */}
+                  {!selectedChar.voiceName && !selectedChar.voiceStyle && (
+                    <p className="text-sm text-muted-foreground">
+                      填写上方的「配音风格」描述后，点击下方按钮让 AI 为该角色设计专属声型。声型一旦生成将<b>固定</b>，后续对话中只需调整语气即可。
+                    </p>
+                  )}
+                  {!selectedChar.voiceName && selectedChar.voiceStyle && (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                      <p className="text-sm">
+                        已填写配音风格：<span className="font-medium text-amber-600 dark:text-amber-400">「{selectedChar.voiceStyle}」</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        点击生成后，AI 将根据此描述创建固定声型。生成后声型不可修改，仅可调整语气。
+                      </p>
+                    </div>
+                  )}
+                  {selectedChar.voiceName && (
+                    <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-3">
+                      <div className="flex items-center gap-2">
+                        <Lock className="h-4 w-4 text-purple-500" />
+                        <span className="text-sm font-medium">声型已固定</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        声型描述：{selectedChar.voiceStyle}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        声型ID：<code className="text-[11px] bg-muted px-1 rounded">{selectedChar.voiceName}</code>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        此声型已与「{selectedChar.name}」绑定。在对话编辑中，将使用此声型为该角色的每句台词配音，只需选择语气（傲娇/温柔/冷淡等）即可。
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 操作按钮 */}
+                  <div className="flex gap-2">
+                    {!selectedChar.voiceName ? (
+                      <Button
+                        size="sm"
+                        onClick={() => handleDesignVoice(selectedChar.id)}
+                        disabled={!selectedChar.voiceStyle || voiceGenerating === selectedChar.id}
+                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-none"
+                      >
+                        {voiceGenerating === selectedChar.id ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                            AI 生成声型中...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3.5 w-3.5 mr-1" />
+                            AI 生成声型
+                          </>
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handlePreviewVoice(selectedChar.id)}
+                        className="text-purple-600 border-purple-500/30"
+                      >
+                        {voicePlaying === selectedChar.id ? (
+                          <>
+                            <Pause className="h-3.5 w-3.5 mr-1" />
+                            停止试听
+                          </>
+                        ) : (
+                          <>
+                            <Play className="h-3.5 w-3.5 mr-1" />
+                            试听声型
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* 提示 */}
+                  {selectedChar.voiceName && (
+                    <p className="text-[11px] text-muted-foreground">
+                      💡 声型已锁定。如需更改，请删除当前角色后重新创建，或联系开发者在后续版本中支持重新生成。
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 

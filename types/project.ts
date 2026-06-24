@@ -52,6 +52,7 @@ export interface Project {
   coverUrl: string
   tags: GameCategory[]
   storyLength: StoryLength
+  chapterCount: number    // 章节数量（3-18，默认8）
   worldSetting: string
   currentStep: number // 1-6
   createdAt: string
@@ -185,9 +186,17 @@ export interface PublicWork {
 export interface AssetCharacter {
   name: string
   role: string
-  spriteDesc: string       // AI 生成的立绘文字描述
-  generatedUrl?: string    // 生成立绘后的 URL
+  spriteDesc: string          // AI 生成的立绘文字描述
+  generatedUrl?: string       // 生成立绘后的 URL
   generating?: boolean
+  // 配音相关
+  voiceStyle?: string         // 配音风格描述（用户填写）
+  voiceName?: string          // 声型ID（designVoice 返回，可重新生成）
+  voicePreviewUrl?: string    // 生成时的试听音频（base64）
+  voiceGenerating?: boolean
+  voiceLanguage?: string      // 配音语言：中 / 日 / 英
+  // 候选
+  candidates?: { url: string; selected: boolean }[]
 }
 
 export interface AssetBackground {

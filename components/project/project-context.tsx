@@ -18,6 +18,7 @@ function createMockProject(id: string): Project {
     coverUrl: "",
     tags: ["校园"],
     storyLength: "短篇",
+    chapterCount: 8,
     worldSetting: "",
     currentStep: 1,
     createdAt: new Date().toISOString(),

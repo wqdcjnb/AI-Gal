@@ -22,6 +22,8 @@ import {
   Loader2,
   FileText,
   BookOpen,
+  Minus,
+  Plus,
 } from "lucide-react"
 import Link from "next/link"
 import type { GameCategory, StoryLength } from "@/types/project"
@@ -37,12 +39,6 @@ const categories: GameCategory[] = [
   "古风",
 ]
 
-const storyLengths: { value: StoryLength; label: string; desc: string }[] = [
-  { value: "短篇", label: "短篇", desc: "约 3 章，适合快速讲完一个小故事" },
-  { value: "中篇", label: "中篇", desc: "约 8 章，标准的 Galgame 叙事篇幅" },
-  { value: "长篇", label: "长篇", desc: "15+ 章，宏大的多分支叙事" },
-]
-
 export default function NewProjectPage() {
   const router = useRouter()
   const { createProject, updateProject } = useProject()
@@ -51,6 +47,7 @@ export default function NewProjectPage() {
   const [description, setDescription] = useState("")
   const [tags, setTags] = useState<GameCategory[]>([])
   const [storyLength, setStoryLength] = useState<StoryLength>("短篇")
+  const [chapterCount, setChapterCount] = useState(8)
   const [coverUrl, setCoverUrl] = useState("")
   const [worldSetting, setWorldSetting] = useState("")
   const [generating, setGenerating] = useState(false)
@@ -97,6 +94,7 @@ export default function NewProjectPage() {
       coverUrl,
       tags,
       storyLength,
+      chapterCount,
       worldSetting,
       currentStep: 1,
     })
@@ -185,26 +183,34 @@ export default function NewProjectPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>故事篇幅</Label>
-                <Select value={storyLength} onValueChange={(v: string) => setStoryLength(v as StoryLength)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {storyLengths.map((sl) => (
-                      <SelectItem key={sl.value} value={sl.value}>
-                        {sl.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>章节数量</Label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    disabled={chapterCount <= 3}
+                    onClick={() => setChapterCount((c) => Math.max(3, c - 1))}
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </Button>
+                  <div className="flex-1 text-center">
+                    <span className="text-2xl font-bold tabular-nums">{chapterCount}</span>
+                    <span className="text-sm text-muted-foreground ml-1">章</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    disabled={chapterCount >= 18}
+                    onClick={() => setChapterCount((c) => Math.min(18, c + 1))}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">最少 3 章，最多 18 章。可在章节编辑中随时增减</p>
               </div>
             </div>
-            {storyLength && (
-              <p className="text-xs text-muted-foreground">
-                {storyLengths.find((s) => s.value === storyLength)?.desc}
-              </p>
-            )}
           </CardContent>
         </Card>
 
