@@ -291,7 +291,7 @@ export default function ExportPage() {
               <p>
                 <strong className="text-foreground">3. 启动 Ren&apos;Py 并运行</strong>
                 <br />
-                打开 Ren&apos;Py Launcher，在项目列表中找到你的游戏，点击「Launch Project」即可运行。
+                打开 Ren&apos;Py Launcher，在游戏列表中找到你的游戏，点击「Launch Project」即可运行。
               </p>
             </div>
           </CardContent>
@@ -306,7 +306,7 @@ export default function ExportPage() {
           </Button>
           <Button variant="outline" asChild>
             <Link href="/dashboard/projects">
-              返回项目列表
+              返回游戏列表
             </Link>
           </Button>
         </div>

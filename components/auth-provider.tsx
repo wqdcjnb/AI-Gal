@@ -12,6 +12,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { AuthDialog } from "./auth-dialog";
 
 interface AuthUser {
+  uid: string;
   email: string;
   nickname?: string;
   avatarUrl?: string;
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((data) => {
         if (data.loggedIn && data.user) {
           setUser({
+            uid: data.user.uid || "",
             email: data.user.email,
             nickname: data.user.nickname || data.user.email?.split("@")[0] || "",
             avatarUrl: data.user.avatarUrl || "",
@@ -60,12 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // 已登录状态下访问首页 → 自动跳转 Dashboard
-  useEffect(() => {
-    if (!loading && user && pathname === "/") {
-      router.replace("/dashboard/projects");
-    }
-  }, [loading, user, pathname, router]);
+  // 首页现在是落地页，已登录用户也可以访问
 
   const openAuth = useCallback(() => {
     setDialogOpen(true);
@@ -91,19 +88,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
         if (data.loggedIn && data.user) {
           setUser({
+            uid: data.user.uid || "",
             email: data.user.email,
             nickname: data.user.nickname || email.split("@")[0],
             avatarUrl: data.user.avatarUrl || "",
           });
         } else {
           // 降级：无法获取完整信息时用 email 构造
-          setUser({ email, nickname: email.split("@")[0], avatarUrl: "" });
+          setUser({ uid: "", email, nickname: email.split("@")[0], avatarUrl: "" });
         }
       } catch {
         // 网络异常降级
-        setUser({ email, nickname: email.split("@")[0], avatarUrl: "" });
+        setUser({ uid: "", email, nickname: email.split("@")[0], avatarUrl: "" });
       }
-      router.push("/dashboard/projects");
+      router.push("/dashboard");
     },
     [router]
   );

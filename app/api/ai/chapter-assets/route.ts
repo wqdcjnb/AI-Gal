@@ -38,29 +38,28 @@ export async function POST(request: Request) {
   "cg": [{ "trigger": "触发时机", "desc": "CG画面描述（二次元风格单帧 - 构图、人物、光影、色调）" }]
 }`;
 
-    // TODO: 待网络恢复后接入真实 AI API（千问/DeepSeek）
-    // const data = await fetch("https://dashscope.aliyuncs.com/...", { ... })
-
-    // 先返回 mock 数据跑通 UI
-    const mockAssets = {
-      characters: [
-        { name: "主角", role: "玩家角色", spriteDesc: "校服，短发，略显稚嫩的面庞，眼神坚定" },
-        { name: "神秘少女", role: "关键角色", spriteDesc: "白色连衣裙，长发及腰，面带神秘的微笑，袖口绣有花纹" },
-      ],
-      backgrounds: [
-        { scene: "校园门口", desc: "春日傍晚，夕阳将天空染成橙红色，校门口的樱花树正盛开，花瓣随风飘落" },
-        { scene: "空教室", desc: "黄昏时分，空无一人的教室，黑板上有未擦的粉笔字，窗外传来远处社团活动的喧闹声" },
-      ],
-      bgm: [
-        { mood: "温馨", desc: "轻柔的钢琴独奏，节奏舒缓，带有些许怀旧感，音量适中" },
-        { mood: "紧张", desc: "弦乐渐强，低音提琴拨弦，节奏加快，营造不安的氛围" },
-      ],
-      cg: [
-        { trigger: "少女在樱花树下回头", desc: "樱花树下的特写镜头，夕阳逆光，少女回眸露出温柔的微笑，背景虚化成粉色光斑" },
-      ],
-    };
-
-    return NextResponse.json({ success: true, assets: mockAssets });
+    const res = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.DASHSCOPE_TEXT_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "qwen-plus",
+        messages: [
+          { role: "system", content: "你是一位 Galgame 艺术总监。只输出纯 JSON，不要 markdown 代码块，不要额外解释。" },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 2048,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || "调用失败");
+    const content = data.choices?.[0]?.message?.content || "";
+    const cleaned = content.replace(/```json\n?|```/g, "").trim();
+    const assets = JSON.parse(cleaned);
+    return NextResponse.json({ success: true, assets });
   } catch (err: any) {
     return NextResponse.json({ success: false, message: err.message || "生成失败" }, { status: 500 });
   }

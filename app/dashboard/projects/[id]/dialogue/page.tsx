@@ -49,53 +49,20 @@ interface MockBranch {
   targetChapter: string
 }
 
-const mockChapters: { id: string; title: string }[] = [
-  { id: "ch-1", title: "第一章：樱吹雪的相遇" },
-  { id: "ch-2", title: "第二章：社团的选择" },
-  { id: "ch-3", title: "第三章：午后的图书馆" },
-  { id: "ch-4", title: "第四章：文化祭的准备" },
-  { id: "ch-5", title: "第五章：雨夜的告白" },
-]
-
 const tones: ToneType[] = ["傲娇", "冷淡", "温柔", "腹黑", "元气", "成熟", "慵懒"]
 
 const quickActions = [
-  { label: "角色出场", icon: UserRound, template: "[林小樱 出场]" },
-  { label: "背景切换", icon: Image, template: "[背景切换：教室]" },
-  { label: "BGM标记", icon: Music, template: "[BGM：日常_温馨]" },
+  { label: "角色出场", icon: UserRound, template: "[角色名 出场]" },
+  { label: "背景切换", icon: Image, template: "[背景切换：场景名]" },
+  { label: "BGM标记", icon: Music, template: "[BGM：情绪标签]" },
   { label: "分支开始", icon: GitMerge, template: "[分支选项]" },
-]
-
-const initialLines: MockLine[] = [
-  { id: "l-1", type: "narration", text: "午后的阳光透过图书馆的窗户，在木质地板上投下斑驳的光影。" },
-  {
-    id: "l-2",
-    type: "dialogue",
-    characterName: "林小樱",
-    text: "这本书...你也喜欢看吗？",
-    tone: "温柔",
-  },
-  {
-    id: "l-3",
-    type: "dialogue",
-    characterName: "主角",
-    text: "啊，是的。这是我今年最喜欢的一本小说。没想到你也读过了。",
-  },
-  {
-    id: "l-4",
-    type: "dialogue",
-    characterName: "林小樱",
-    text: "嗯...我很喜欢作者的文笔。特别是描写日常生活的那些段落，让人感觉很温暖。",
-    tone: "害羞",
-  },
-  { id: "l-5", type: "narration", text: "她说话的时候，手指轻轻摩挲着书页的边缘，脸上浮现出淡淡的笑意。" },
 ]
 
 export default function DialoguePage() {
   const params = useParams()
   const projectId = params.id as string
-  const [selectedChapter, setSelectedChapter] = useState(mockChapters[0].id)
-  const [lines, setLines] = useState<MockLine[]>(initialLines)
+  const [selectedChapter, setSelectedChapter] = useState("")
+  const [lines, setLines] = useState<MockLine[]>([])
   const [branches, setBranches] = useState<MockBranch[]>([])
   const [generating, setGenerating] = useState(false)
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null)
@@ -139,7 +106,7 @@ export default function DialoguePage() {
       {
         id: `b-${Date.now()}`,
         text: "新选项",
-        targetChapter: mockChapters[mockChapters.length - 1].id,
+        targetChapter: "",
       },
     ])
   }
@@ -223,7 +190,7 @@ export default function DialoguePage() {
         <div className="w-52 shrink-0 space-y-3">
           <h3 className="text-sm font-semibold">章节选择</h3>
           <div className="space-y-1">
-            {mockChapters.map((ch) => (
+            {([] as { id: string; title: string }[]).map((ch) => (
               <button
                 key={ch.id}
                 onClick={() => setSelectedChapter(ch.id)}
@@ -517,7 +484,7 @@ export default function DialoguePage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockChapters.map((ch) => (
+                      {([] as { id: string; title: string }[]).map((ch) => (
                         <SelectItem key={ch.id} value={ch.id}>
                           {ch.title}
                         </SelectItem>

@@ -47,11 +47,6 @@ export default function ProjectsPage() {
     "全部", "校园", "奇幻", "悬疑", "异世界", "日常", "科幻", "恋爱", "古风",
   ]
 
-  const handleCreate = () => {
-    const project = createProject()
-    window.location.href = `/dashboard/projects/${project.id}`
-  }
-
   const handleDelete = () => {
     deleteProject(deleteDialog.id)
     setDeleteDialog({ open: false, id: "", name: "" })
@@ -66,18 +61,15 @@ export default function ProjectsPage() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">我的项目</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">我的游戏</h1>
           <p className="text-muted-foreground mt-1">管理你创建的所有 Galgame 项目</p>
         </div>
-        <Button onClick={handleCreate} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-none">
-          <Plus className="h-4 w-4" />新建游戏
-        </Button>
       </div>
 
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="搜索项目名称..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <Input placeholder="搜索游戏名称..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
         </div>
         <Select value={categoryFilter} onValueChange={(v: string) => setCategoryFilter(v as GameCategory | "全部")}>
           <SelectTrigger className="w-[120px]"><Filter className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
@@ -90,11 +82,11 @@ export default function ProjectsPage() {
           <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
             <FolderOpen className="h-7 w-7 text-muted-foreground" />
           </div>
-          <h3 className="font-medium text-lg mb-1">{search || categoryFilter !== "全部" ? "没有匹配的项目" : "还没有项目"}</h3>
+          <h3 className="font-medium text-lg mb-1">{search || categoryFilter !== "全部" ? "没有匹配的游戏" : "还没有游戏"}</h3>
           <p className="text-muted-foreground text-sm mb-6">{search || categoryFilter !== "全部" ? "试试调整搜索或筛选条件" : "创建你的第一个 Galgame 项目开始创作"}</p>
           {!search && categoryFilter === "全部" && (
-            <Button onClick={handleCreate} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-none">
-              <Plus className="h-4 w-4" />创建第一个项目
+            <Button asChild className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-none">
+              <Link href="/dashboard/projects/new"><Plus className="h-4 w-4" />创建第一个游戏</Link>
             </Button>
           )}
         </div>
@@ -129,13 +121,13 @@ export default function ProjectsPage() {
                   <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.preventDefault()}>
                     <DropdownMenuItem
                       disabled={project.currentStep < 6}
-                      title={project.currentStep < 6 ? "项目未完成，无法分享" : undefined}
+                      title={project.currentStep < 6 ? "游戏未完成，无法分享" : undefined}
                     >
                       <Share2 className="h-3.5 w-3.5 mr-2" />分享游戏
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={project.currentStep < 6}
-                      title={project.currentStep < 6 ? "项目未完成，无法下载" : undefined}
+                      title={project.currentStep < 6 ? "游戏未完成，无法下载" : undefined}
                     >
                       <Download className="h-3.5 w-3.5 mr-2" />下载游戏
                     </DropdownMenuItem>
@@ -171,8 +163,8 @@ export default function ProjectsPage() {
       <Dialog open={deleteDialog.open} onOpenChange={(open: boolean) => !open && setDeleteDialog({ open: false, id: "", name: "" })}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>删除项目</DialogTitle>
-            <DialogDescription>确定要删除「{deleteDialog.name}」吗？此操作不可撤销，所有项目数据将被永久删除。</DialogDescription>
+            <DialogTitle>删除游戏</DialogTitle>
+            <DialogDescription>确定要删除「{deleteDialog.name}」吗？此操作不可撤销，所有游戏数据将被永久删除。</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialog({ open: false, id: "", name: "" })}>取消</Button>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,6 +22,7 @@ const MAX_AVATAR_SIZE = 5 * 1024 * 1024 // 5MB
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth()
+  const router = useRouter()
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
   // ---- 昵称编辑状态 ----
@@ -88,41 +90,41 @@ export default function ProfilePage() {
       setErrorMessage("昵称不能为空")
       return
     }
-    if (trimmed === originalNickname) {
-      setSaveStatus("success")
-      setTimeout(() => setSaveStatus("idle"), 2000)
-      return
-    }
 
     setSaving(true)
     setSaveStatus("idle")
     setErrorMessage("")
 
-    try {
-      const res = await fetch("/api/user/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname: trimmed }),
-      })
-      const data = await res.json()
+    if (trimmed !== originalNickname) {
+      try {
+        const res = await fetch("/api/user/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nickname: trimmed }),
+        })
+        const data = await res.json()
 
-      if (data.success) {
-        setNickname(trimmed)
-        setOriginalNickname(trimmed)
-        setSaveStatus("success")
-        // 同步到 AuthContext → Topbar 实时更新
-        updateUser({ nickname: trimmed })
-        setTimeout(() => setSaveStatus("idle"), 2000)
-      } else {
+        if (data.success) {
+          setNickname(trimmed)
+          setOriginalNickname(trimmed)
+          updateUser({ nickname: trimmed })
+        } else {
+          setSaveStatus("error")
+          setErrorMessage(data.message || "保存失败")
+          setSaving(false)
+          return
+        }
+      } catch {
         setSaveStatus("error")
-        setErrorMessage(data.message || "保存失败")
+        setErrorMessage("网络错误，请稍后重试")
+        setSaving(false)
+        return
       }
-    } catch {
-      setSaveStatus("error")
-      setErrorMessage("网络错误，请稍后重试")
-    } finally {
-      setSaving(false)
     }
+
+    setSaving(false)
+    setSaveStatus("success")
+    router.push("/dashboard")
   }
 
   // 步骤 1：选择文件 → 仅显示预览，不自动上传
@@ -298,8 +300,6 @@ export default function ProfilePage() {
     }
   }
 
-  const hasChanges = nickname.trim() !== originalNickname
-
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
@@ -461,7 +461,7 @@ export default function ProfilePage() {
               maxLength={30}
               disabled={loadingProfile}
               onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === "Enter") handleSave()
+                if (e.key === "Enter" && nickname.trim()) handleSave()
               }}
             />
             <p className="text-xs text-muted-foreground">
@@ -469,24 +469,20 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          {/* 保存按钮 + 状态提示 */}
+          {/* 保存并退出按钮 + 状态提示 */}
           <div className="flex items-center gap-3">
             <Button
               onClick={handleSave}
-              disabled={saving || !hasChanges || loadingProfile}
+              disabled={saving || !nickname.trim() || loadingProfile}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-none"
             >
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   保存中...
                 </>
-              ) : saveStatus === "success" ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  已保存
-                </>
               ) : (
-                "保存修改"
+                "保存并退出"
               )}
             </Button>
 

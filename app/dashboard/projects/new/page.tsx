@@ -61,11 +61,11 @@ export default function NewProjectPage() {
       const res = await fetch("/api/ai/outline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+        body: JSON.stringify({ name: name.trim(), description: description.trim(), chapterCount }),
       })
       const data = await res.json()
       if (data.success) {
-        setWorldSetting(data.outline)
+        setWorldSetting(data.outline.trim())
       }
     } catch {
       // 失败时保持当前内容，不做替换
@@ -86,16 +86,16 @@ export default function NewProjectPage() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     setErrors({})
     setSaving(true)
-    // 创建项目并跳转
-    const project = createProject()
-    updateProject(project.id, {
+    // 创建游戏并跳转
+    const project = await createProject()
+    await updateProject(project.id, {
       name: name.trim(),
-      description,
+      description: description.trim(),
       coverUrl,
       tags,
       storyLength,
       chapterCount,
-      worldSetting,
+      worldSetting: worldSetting.trim(),
       currentStep: 1,
     })
     router.push(`/dashboard/projects/${project.id}/chapters`)
@@ -113,7 +113,7 @@ export default function NewProjectPage() {
         </Button>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">新建游戏</h1>
-          <p className="text-sm text-muted-foreground">步骤 1/6 · 项目基础配置</p>
+          <p className="text-sm text-muted-foreground">步骤 1/6 · 游戏基础配置</p>
         </div>
       </div>
 
@@ -227,7 +227,7 @@ export default function NewProjectPage() {
               placeholder="描述你的故事大纲，或使用 AI 自动生成..."
               value={worldSetting}
               onChange={(e) => { setWorldSetting(e.target.value); setErrors((p) => ({ ...p, worldSetting: "" })) }}
-              rows={5}
+              className="min-h-[400px]"
             />
             {errors.worldSetting && <p className="text-xs text-red-500 mt-1">{errors.worldSetting}</p>}
             <Button

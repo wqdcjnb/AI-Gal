@@ -13,9 +13,7 @@ interface TopbarProps {
   onMenuClick: () => void
 }
 
-const navItems = [
-  { label: "我的项目", href: "/dashboard/projects" },
-]
+const navItems: { label: string; href: string }[] = []
 
 export function Topbar({ onMenuClick }: TopbarProps) {
   const { user, logout } = useAuth()
@@ -56,23 +54,6 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           <span className="font-semibold text-sm hidden sm:block">AI-Gal</span>
         </Link>
 
-        {/* Navigation items */}
-        <nav className="hidden md:flex items-center gap-0.5">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-sm transition-colors",
-                isActive(item.href)
-                  ? "bg-foreground text-background font-medium"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
       </div>
 
       {/* Right: Theme + User */}

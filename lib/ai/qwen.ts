@@ -7,14 +7,15 @@
  */
 const BASE_URL = "https://dashscope.aliyuncs.com/api/v1/services";
 
-const apiKey = () => process.env.DASHSCOPE_API_KEY!;
+const imageKey = () => process.env.DASHSCOPE_IMAGE_KEY!;
+const voiceKey = () => process.env.DASHSCOPE_VOICE_KEY!;
 
 /** 调用 DashScope 异步 API */
 async function callAsync(path: string, body: Record<string, any>) {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey()}`,
+      Authorization: `Bearer ${imageKey()}`,
       "Content-Type": "application/json",
       "X-DashScope-Async": "enable",
     },
@@ -31,7 +32,7 @@ async function callAsync(path: string, body: Record<string, any>) {
 async function pollTask(taskId: string): Promise<any> {
   for (let i = 0; i < 90; i++) {
     const res = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${apiKey()}` },
+      headers: { Authorization: `Bearer ${imageKey()}` },
     });
     const data = await res.json();
     if (data.code && data.message) throw new Error(data.message);
@@ -117,7 +118,7 @@ export async function designVoice(params: VoiceDesignParams): Promise<VoiceDesig
   const res = await fetch(`${BASE_URL}/audio/tts/customization`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey()}`,
+      Authorization: `Bearer ${voiceKey()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -152,7 +153,7 @@ export async function cloneVoice(params: VoiceCloneParams): Promise<{ voiceName:
   const res = await fetch(`${BASE_URL}/audio/tts/customization`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey()}`,
+      Authorization: `Bearer ${voiceKey()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -181,7 +182,7 @@ export async function textToSpeech(params: SpeechParams): Promise<string> {
   const res = await fetch(`${BASE_URL}/audio/tts/customization`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey()}`,
+      Authorization: `Bearer ${voiceKey()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
