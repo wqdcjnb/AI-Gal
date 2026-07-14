@@ -10,7 +10,7 @@ export interface GameProject {
   synopsis: string;
   cover_url: string | null;
   chapter_count: number;
-  status: 'draft' | 'editing' | 'complete';
+  status: 'editing' | 'complete';
   created_at: string;
   updated_at: string;
   // Computed fields
@@ -44,13 +44,11 @@ export const SETTING_LABELS: Record<string, { label: string; icon: string; color
 };
 
 export const STRUCTURE_LABELS: Record<string, { label: string; icon: string; desc: string }> = {
-  '线性叙事': { label: '线性', icon: '→', desc: '无选择支，纯阅读体验' },
   '分支叙事': { label: '分支', icon: '⑂', desc: '共通线+个人线，选择决定路线' },
   '多结局': { label: '多结局', icon: '⑃', desc: '多个BE/NE/GE/TE' },
 };
 
 export const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  draft: { label: '草稿', color: 'bg-zinc-500/20 text-zinc-400' },
   editing: { label: '编辑中', color: 'bg-pink-500/20 text-pink-400' },
   complete: { label: '已完成', color: 'bg-emerald-500/20 text-emerald-400' },
 };
@@ -94,11 +92,11 @@ export const mockProjects: GameProject[] = [
     name: '樱花庄的魔法使',
     style: '萌系',
     setting: '奇幻',
-    structure: '线性叙事',
+    structure: '分支叙事',
     synopsis: '在魔法与日常共存的小镇上，见习魔法使与青梅竹马的轻松日常。温馨治愈的魔法喜剧故事。',
     cover_url: null,
     chapter_count: 5,
-    status: 'draft',
+    status: 'editing',
     created_at: '2025-07-05T14:00:00Z',
     updated_at: '2025-07-05T14:00:00Z',
     chapterCount: 5,

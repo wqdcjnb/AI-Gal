@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { toast, Toaster } from 'sonner';
 import {
   Plus,
   BookOpen,
@@ -10,7 +9,6 @@ import {
   Users,
   Clock,
   MoreHorizontal,
-  Pencil,
   Settings,
   Trash2,
   Sparkles,
@@ -69,33 +67,35 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<GameProject[]>(mockProjects);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GameProject | null>(null);
-  const [renameTarget, setRenameTarget] = useState<GameProject | null>(null);
   const [settingsTarget, setSettingsTarget] = useState<GameProject | null>(null);
 
-  const handleCreateProject = (data: { name: string; style: string; setting: string; structure: string; chapterCount: number }) => {
+  const handleCreateProject = (data: { name: string; style: string; setting: string; structure: string; chapterCount: number; synopsis: string }) => {
     const newProject: GameProject = {
       id: `${Date.now()}`,
       name: data.name,
       style: data.style,
       setting: data.setting,
       structure: data.structure,
-      synopsis: '',
+      synopsis: data.synopsis,
       cover_url: null,
       chapter_count: data.chapterCount,
-      status: 'draft',
+      status: 'editing',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       chapterCount: data.chapterCount,
       sceneCount: 0,
       characterCount: 0,
-    };
-    setProjects([newProject, ...projects]);
-    toast.success(`「${data.name}」创建成功！`);
-  };
+    }
+    setProjects([newProject, ...projects])
+    localStorage.setItem(`project-${newProject.id}`, JSON.stringify({
+      id: newProject.id, name: newProject.name, emotionStyle: newProject.style,
+      themeBackground: newProject.setting, narrativeStructure: newProject.structure,
+      synopsis: newProject.synopsis, chapterCount: newProject.chapter_count, chapters: [],
+    }))
+  }
 
   return (
     <TooltipProvider>
-      <Toaster position="top-center" richColors />
       <div className="mx-auto max-w-[1600px] px-6 py-8">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
@@ -128,7 +128,6 @@ export default function DashboardPage() {
                 project={project}
                 gradientIndex={index % COVER_GRADIENTS.length}
                 onDelete={() => setDeleteTarget(project)}
-                onRename={() => setRenameTarget(project)}
                 onSettings={() => setSettingsTarget(project)}
               />
             ))}
@@ -177,268 +176,32 @@ export default function DashboardPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Rename Dialog */}
-        <RenameDialog
-          project={renameTarget}
-          onClose={() => setRenameTarget(null)}
-          onRename={(id, name) => {
-            setProjects(projects.map(p => p.id === id ? { ...p, name, updated_at: new Date().toISOString() } : p));
-            toast.success('项目已重命名');
-          }}
-        />
-
         {/* Settings Dialog */}
         <SettingsDialog
           project={settingsTarget}
           onClose={() => setSettingsTarget(null)}
-          onSave={(id, updates) => {
-            setProjects(projects.map(p => p.id === id ? { ...p, ...updates, updated_at: new Date().toISOString() } : p));
-            toast.success('项目设置已更新');
+          onSave={(id, data) => {
+            setProjects(projects.map(p => {
+              if (p.id === id) {
+                const updated = { ...p, name: data.name, style: data.style, setting: data.setting, synopsis: data.synopsis, updated_at: new Date().toISOString() }
+                // Always save to localStorage so editor picks up changes
+                const saved = localStorage.getItem(`project-${id}`)
+                const proj = projects.find(pp => pp.id === id)
+                const editorData = saved ? JSON.parse(saved) : { id, name: data.name, emotionStyle: data.style, themeBackground: data.setting, narrativeStructure: proj?.structure || '分支叙事', synopsis: data.synopsis, chapters: [] }
+                editorData.name = data.name
+                editorData.emotionStyle = data.style
+                editorData.themeBackground = data.setting
+                editorData.synopsis = data.synopsis
+                localStorage.setItem(`project-${id}`, JSON.stringify(editorData))
+                return updated
+              }
+              return p
+            }))
+            setSettingsTarget(null)
           }}
         />
       </div>
     </TooltipProvider>
-  );
-}
-
-// ========== Rename Dialog ==========
-function RenameDialog({
-  project,
-  onClose,
-  onRename,
-}: {
-  project: GameProject | null;
-  onClose: () => void;
-  onRename: (id: string, name: string) => void;
-}) {
-  const [name, setName] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (project) {
-      setName(project.name);
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 100);
-    }
-  }, [project]);
-
-  const handleConfirm = () => {
-    if (!project || !name.trim()) return;
-    onRename(project.id, name.trim());
-    onClose();
-  };
-
-  return (
-    <Dialog open={!!project} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-white border-pink-100/60 shadow-xl shadow-pink-100/20">
-        <DialogHeader>
-          <DialogTitle className="text-stone-800">重命名项目</DialogTitle>
-          <DialogDescription className="text-stone-500">
-            修改项目名称
-          </DialogDescription>
-        </DialogHeader>
-        <Input
-          ref={inputRef}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleConfirm();
-            if (e.key === 'Escape') onClose();
-          }}
-          className="bg-stone-50 border-stone-200 focus:border-pink-300 text-stone-800"
-        />
-        <div className="flex justify-end gap-3 mt-2">
-          <Button variant="outline" onClick={onClose} className="border-stone-200 text-stone-600 hover:bg-stone-50">取消</Button>
-          <Button onClick={handleConfirm} disabled={!name.trim()} className="bg-gradient-to-r from-pink-400 to-violet-400 hover:from-pink-500 hover:to-violet-500 text-white">确认</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ========== Settings Dialog ==========
-function SettingsDialog({
-  project,
-  onClose,
-  onSave,
-}: {
-  project: GameProject | null;
-  onClose: () => void;
-  onSave: (id: string, updates: Partial<GameProject>) => void;
-}) {
-  const [name, setName] = useState('');
-  const [synopsis, setSynopsis] = useState('');
-  const [style, setStyle] = useState('');
-  const [setting, setSetting] = useState('');
-  const [structure, setStructure] = useState('');
-  const [chapterCount, setChapterCount] = useState(5);
-  const [coverPreview, setCoverPreview] = useState<string | null>(null);
-  const coverInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (project) {
-      setName(project.name);
-      setSynopsis(project.synopsis || '');
-      setStyle(project.style);
-      setSetting(project.setting);
-      setStructure(project.structure);
-      setChapterCount(project.chapter_count || 5);
-      setCoverPreview(null);
-    }
-  }, [project]);
-
-  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return;
-    setCoverPreview(URL.createObjectURL(file));
-  };
-
-  const handleSave = () => {
-    if (!project || !name.trim()) return;
-    onSave(project.id, {
-      name: name.trim(),
-      synopsis,
-      style,
-      setting,
-      structure,
-      chapter_count: chapterCount,
-      chapterCount,
-    });
-    onClose();
-  };
-
-  return (
-    <Dialog open={!!project} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl bg-white border-pink-100/60 shadow-xl shadow-pink-100/20 max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-stone-800 flex items-center gap-2">
-            <Settings className="h-5 w-5 text-pink-400" />
-            项目设置
-          </DialogTitle>
-          <DialogDescription className="text-stone-500">
-            修改项目的核心配置
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-6 mt-2">
-          {/* Project Name */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-stone-700">项目名称 <span className="text-pink-400">*</span></Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} className="bg-stone-50 border-stone-200 focus:border-pink-300 text-stone-800" />
-          </div>
-
-          {/* Synopsis */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-stone-700">世界观设定</Label>
-            <Textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} maxLength={200} rows={3} className="bg-stone-50 border-stone-200 focus:border-pink-300 resize-none text-stone-800" />
-          </div>
-
-          {/* Style */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-stone-700">情感风格 <span className="text-pink-400">*</span></Label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {Object.entries(STYLE_LABELS).map(([key, info]) => (
-                <button key={key} type="button" onClick={() => setStyle(key)}
-                  className={`relative flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-all duration-200 ${
-                    style === key ? 'border-pink-400 bg-pink-50/80 shadow-sm shadow-pink-100' : 'border-stone-200 bg-white hover:border-pink-200 hover:bg-pink-50/30'
-                  }`}>
-                  {style === key && (
-                    <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-pink-400 text-white">
-                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    </span>
-                  )}
-                  <span className="text-xl">{info.icon}</span>
-                  <span className={`text-sm font-medium ${style === key ? 'text-pink-700' : 'text-stone-700'}`}>{info.label}</span>
-                  <span className="text-[11px] text-stone-400 leading-tight line-clamp-2">{info.desc}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Setting */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-stone-700">题材背景 <span className="text-pink-400">*</span></Label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {Object.entries(SETTING_LABELS).map(([key, info]) => (
-                <button key={key} type="button" onClick={() => setSetting(key)}
-                  className={`relative flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all duration-200 ${
-                    setting === key ? 'border-pink-400 bg-pink-50/80 shadow-sm shadow-pink-100' : 'border-stone-200 bg-white hover:border-pink-200 hover:bg-pink-50/30'
-                  }`}>
-                  {setting === key && (
-                    <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-pink-400 text-white">
-                      <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    </span>
-                  )}
-                  <span className="text-2xl">{info.icon}</span>
-                  <span className={`text-sm font-medium ${setting === key ? 'text-pink-700' : 'text-stone-700'}`}>{info.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Structure */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-stone-700">叙事结构 <span className="text-pink-400">*</span></Label>
-            <div className="grid grid-cols-3 gap-3">
-              {Object.entries(STRUCTURE_LABELS).map(([key, info]) => (
-                <button key={key} type="button" onClick={() => setStructure(key)}
-                  className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-200 ${
-                    structure === key ? 'border-pink-400 bg-pink-50/80 shadow-sm shadow-pink-100' : 'border-stone-200 bg-white hover:border-pink-200 hover:bg-pink-50/30'
-                  }`}>
-                  {structure === key && (
-                    <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-pink-400 text-white">
-                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    </span>
-                  )}
-                  <span className={`text-2xl font-bold ${structure === key ? 'text-pink-500' : 'text-stone-400'}`}>{info.icon}</span>
-                  <span className={`text-sm font-medium ${structure === key ? 'text-pink-700' : 'text-stone-700'}`}>{info.label}</span>
-                  <span className="text-[11px] text-stone-400 leading-tight">{info.desc}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Chapter Count */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-stone-700">章节数量 <span className="text-xs text-stone-400 ml-2 font-normal">(3-18)</span></Label>
-            <div className="flex items-center gap-3">
-              <Input type="range" min={3} max={18} value={chapterCount} className="flex-1 accent-pink-400" onChange={(e) => setChapterCount(Number(e.target.value))} />
-              <span className="text-sm font-mono text-pink-500 w-8 text-center">{chapterCount}</span>
-            </div>
-          </div>
-
-          {/* Cover */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-stone-700">作品封面</Label>
-            <input ref={coverInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleCoverSelect} className="hidden" />
-            {coverPreview ? (
-              <div className="relative rounded-lg overflow-hidden border border-pink-200">
-                <img src={coverPreview} alt="封面预览" className="w-full aspect-[16/10] object-cover" />
-                <button onClick={() => { setCoverPreview(null); if (coverInputRef.current) coverInputRef.current.value = ''; }} className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors text-sm">✕</button>
-              </div>
-            ) : (
-              <div onClick={() => coverInputRef.current?.click()} className="flex items-center justify-center rounded-lg border-2 border-dashed border-stone-200 bg-stone-50/50 py-6 cursor-pointer hover:border-pink-200 hover:bg-pink-50/30 transition-all">
-                <div className="text-center">
-                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-pink-50 mx-auto"><Plus className="h-5 w-5 text-pink-400" /></div>
-                  <p className="text-sm text-stone-500">点击上传封面图片</p>
-                  <p className="text-[11px] text-stone-400 mt-1">支持 JPG、PNG，建议比例 16:10</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-stone-100">
-          <Button variant="outline" onClick={onClose} className="border-stone-200 text-stone-600 hover:bg-stone-50">取消</Button>
-          <Button onClick={handleSave} disabled={!name.trim()} className="bg-gradient-to-r from-pink-400 to-violet-400 hover:from-pink-500 hover:to-violet-500 text-white">
-            <Sparkles className="mr-2 h-4 w-4" />保存设置
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -447,13 +210,11 @@ function ProjectCard({
   project,
   gradientIndex,
   onDelete,
-  onRename,
   onSettings,
 }: {
   project: GameProject;
   gradientIndex: number;
   onDelete: () => void;
-  onRename: () => void;
   onSettings: () => void;
 }) {
   const router = useRouter();
@@ -471,7 +232,7 @@ function ProjectCard({
   }, [updatedDate]);
 
   return (
-    <div
+    <div 
       onClick={() => router.push(`/editor?id=${project.id}`)}
       className="group relative rounded-xl border border-pink-100/60 bg-white overflow-hidden transition-all duration-300 hover:border-pink-200 hover:shadow-lg hover:shadow-pink-100/40 hover:-translate-y-1 cursor-pointer"
     >
@@ -505,10 +266,6 @@ function ProjectCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-white border-pink-100/60 shadow-lg shadow-pink-100/20">
-              <DropdownMenuItem className="cursor-pointer text-stone-700 hover:bg-pink-50 hover:text-pink-600" onClick={(e) => { e.stopPropagation(); onRename(); }}>
-                <Pencil className="mr-2 h-3.5 w-3.5" />
-                重命名
-              </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer text-stone-700 hover:bg-pink-50 hover:text-pink-600" onClick={(e) => { e.stopPropagation(); onSettings(); }}>
                 <Settings className="mr-2 h-3.5 w-3.5" />
                 项目设置
@@ -623,7 +380,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         创建你的第一个 Galgame
       </h2>
       <p className="text-sm text-stone-500 mb-6 max-w-md">
-        AI 将帮助你从创意到成品，自动生成大纲、章节剧情、角色立绘和背景音乐，最终导出为 Ren&rsquo;Py 可玩格式。
+        AI 将帮助你从创意到成品，自动生成大纲、章节剧情、角色立绘和背景音乐，最终导出为 Ren'Py 可玩格式。
       </p>
       <Button
         onClick={onCreate}
@@ -644,28 +401,16 @@ function CreateProjectDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (data: { name: string; style: string; setting: string; structure: string; chapterCount: number }) => void;
+  onCreate: (data: { name: string; style: string; setting: string; structure: string; chapterCount: number; synopsis: string }) => void;
 }) {
   const [gameName, setGameName] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<string>('');
   const [selectedSetting, setSelectedSetting] = useState<string>('');
   const [selectedStructure, setSelectedStructure] = useState<string>('');
-  const [chapterCount, setChapterCount] = useState(5);
+  const [chapterCount, setChapterCount] = useState(6);
+  const [synopsis, setSynopsis] = useState('');
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
-
-  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return;
-    const url = URL.createObjectURL(file);
-    setCoverPreview(url);
-  };
-
-  const handleRemoveCover = () => {
-    setCoverPreview(null);
-    if (coverInputRef.current) coverInputRef.current.value = '';
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -769,32 +514,38 @@ function CreateProjectDialog({
               叙事结构 <span className="text-pink-400">*</span>
               <span className="text-xs text-stone-400 ml-2 font-normal">决定故事的分支方式</span>
             </Label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               {Object.entries(STRUCTURE_LABELS).map(([key, info]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setSelectedStructure(key)}
-                  className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-200 ${
+                  className={`relative flex items-center gap-4 rounded-xl border-2 p-5 text-left transition-all duration-200 ${
                     selectedStructure === key
-                      ? 'border-pink-400 bg-pink-50/80 shadow-sm shadow-pink-100'
+                      ? 'border-pink-400 bg-gradient-to-r from-pink-50/80 to-violet-50/50 shadow-md shadow-pink-100/50'
                       : 'border-stone-200 bg-white hover:border-pink-200 hover:bg-pink-50/30'
                   }`}
                 >
                   {selectedStructure === key && (
-                    <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-pink-400 text-white">
+                    <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-pink-400 text-white">
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     </span>
                   )}
-                  <span className={`text-2xl font-bold ${selectedStructure === key ? 'text-pink-500' : 'text-stone-400'}`}>
+                  <span className={`flex h-12 w-12 items-center justify-center rounded-lg text-2xl font-bold ${
+                    selectedStructure === key 
+                      ? 'bg-pink-100 text-pink-500' 
+                      : 'bg-stone-100 text-stone-400'
+                  }`}>
                     {info.icon}
                   </span>
-                  <span className={`text-sm font-medium ${selectedStructure === key ? 'text-pink-700' : 'text-stone-700'}`}>
-                    {info.label}
-                  </span>
-                  <span className="text-[11px] text-stone-400 leading-tight">{info.desc}</span>
+                  <div className="flex-1">
+                    <span className={`text-base font-semibold ${selectedStructure === key ? 'text-pink-700' : 'text-stone-700'}`}>
+                      {info.label}
+                    </span>
+                    <p className="text-xs text-stone-500 mt-1 leading-relaxed">{info.desc}</p>
+                  </div>
                 </button>
               ))}
             </div>
@@ -812,8 +563,8 @@ function CreateProjectDialog({
                 min={3}
                 max={18}
                 value={chapterCount}
-                className="flex-1 accent-pink-400"
                 onChange={(e) => setChapterCount(Number(e.target.value))}
+                className="flex-1 accent-pink-400"
               />
               <span className="text-sm font-mono text-pink-500 w-8 text-center">{chapterCount}</span>
             </div>
@@ -822,16 +573,18 @@ function CreateProjectDialog({
           {/* Synopsis */}
           <div className="space-y-2">
             <Label className="text-sm font-medium text-stone-700">
-              世界观设定 <span className="text-pink-400">*</span>
+              游戏简介 <span className="text-pink-400">*</span>
               <span className="text-xs text-stone-400 ml-2 font-normal">AI 将基于此生成剧情</span>
             </Label>
             <Textarea
               placeholder="简单描述你的故事设定、主角、世界观..."
               maxLength={200}
               rows={3}
+              value={synopsis}
+              onChange={(e) => setSynopsis(e.target.value)}
               className="bg-stone-50 border-stone-200 focus:border-pink-300 focus:ring-pink-200/50 resize-none text-stone-800 placeholder:text-stone-400"
             />
-            <p className="text-[11px] text-stone-400 text-right">0/200</p>
+            <p className="text-[11px] text-stone-400 text-right">{synopsis.length}/200</p>
           </div>
 
           {/* Cover Upload (optional) */}
@@ -840,36 +593,18 @@ function CreateProjectDialog({
               作品封面
               <span className="text-xs text-stone-400 ml-2 font-normal">可选，后期可添加</span>
             </Label>
-            <input
-              ref={coverInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={handleCoverSelect}
-              className="hidden"
-            />
+            <input ref={coverInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
+              const f = e.target.files?.[0]; if (f && ['image/png','image/jpeg','image/webp'].includes(f.type)) setCoverPreview(URL.createObjectURL(f))
+            }} className="hidden" />
             {coverPreview ? (
               <div className="relative rounded-lg overflow-hidden border border-pink-200">
-                <img
-                  src={coverPreview}
-                  alt="封面预览"
-                  className="w-full aspect-[16/10] object-cover"
-                />
-                <button
-                  onClick={handleRemoveCover}
-                  className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors text-sm"
-                >
-                  ✕
-                </button>
+                <img src={coverPreview} alt="封面" className="w-full aspect-[16/10] object-cover" />
+                <button onClick={() => { setCoverPreview(null); if (coverInputRef.current) coverInputRef.current.value = '' }} className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">✕</button>
               </div>
             ) : (
-              <div
-                onClick={() => coverInputRef.current?.click()}
-                className="flex items-center justify-center rounded-lg border-2 border-dashed border-stone-200 bg-stone-50/50 py-6 cursor-pointer hover:border-pink-200 hover:bg-pink-50/30 transition-all"
-              >
+              <div onClick={() => coverInputRef.current?.click()} className="flex items-center justify-center rounded-lg border-2 border-dashed border-stone-200 bg-stone-50/50 py-6 cursor-pointer hover:border-pink-200 hover:bg-pink-50/30 transition-all">
                 <div className="text-center">
-                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-pink-50 mx-auto">
-                    <Plus className="h-5 w-5 text-pink-400" />
-                  </div>
+                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-pink-50 mx-auto"><Plus className="h-5 w-5 text-pink-400" /></div>
                   <p className="text-sm text-stone-500">点击上传封面图片</p>
                   <p className="text-[11px] text-stone-400 mt-1">支持 JPG、PNG，建议比例 16:10</p>
                 </div>
@@ -890,19 +625,8 @@ function CreateProjectDialog({
           <Button
             onClick={() => {
               if (gameName.trim() && selectedStyle && selectedSetting && selectedStructure) {
-                onCreate({
-                  name: gameName.trim(),
-                  style: selectedStyle,
-                  setting: selectedSetting,
-                  structure: selectedStructure,
-                  chapterCount,
-                });
-                setGameName('');
-                setSelectedStyle('');
-                setSelectedSetting('');
-                setSelectedStructure('');
-                setChapterCount(5);
-                setCoverPreview(null);
+                onCreate({ name: gameName.trim(), style: selectedStyle, setting: selectedSetting, structure: selectedStructure, chapterCount, synopsis })
+                setGameName(''); setSelectedStyle(''); setSelectedSetting(''); setSelectedStructure(''); setChapterCount(6); setSynopsis(''); setCoverPreview(null)
               }
               onOpenChange(false);
             }}
@@ -915,6 +639,155 @@ function CreateProjectDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+// ========== Settings Dialog ==========
+function SettingsDialog({
+  project,
+  onClose,
+  onSave,
+}: {
+  project: GameProject | null;
+  onClose: () => void;
+  onSave: (id: string, data: { name: string; style: string; setting: string; synopsis: string }) => void;
+}) {
+  const [name, setName] = useState('')
+  const [selectedStyle, setSelectedStyle] = useState('')
+  const [selectedSetting, setSelectedSetting] = useState('')
+  const [synopsis, setSynopsis] = useState('')
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (project) {
+      setName(project.name)
+      setSelectedStyle(project.style)
+      setSelectedSetting(project.setting)
+      setSynopsis(project.synopsis || '')
+      setCoverPreview(null)
+    }
+  }, [project])
+
+  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return
+    if (!['image/png','image/jpeg','image/webp'].includes(file.type)) return
+    setCoverPreview(URL.createObjectURL(file))
+  }
+
+  return (
+    <Dialog open={!!project} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-2xl bg-white border-pink-100/60 shadow-xl shadow-pink-100/20 max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-stone-800 flex items-center gap-2">
+            <Settings className="h-5 w-5 text-pink-400" />
+            项目设置
+          </DialogTitle>
+          <DialogDescription className="text-stone-500">
+            修改项目的基本信息
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 mt-2">
+          {/* Game Name */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-stone-700">
+              游戏名称 <span className="text-pink-400">*</span>
+            </Label>
+            <Input placeholder="输入你的游戏名称..." value={name} onChange={(e) => setName(e.target.value)}
+              className="bg-stone-50 border-stone-200 focus:border-pink-300 focus:ring-pink-200/50 text-stone-800 placeholder:text-stone-400" />
+          </div>
+
+          {/* Style */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium text-stone-700">
+              情感风格 <span className="text-pink-400">*</span>
+              <span className="text-xs text-stone-400 ml-2 font-normal">决定故事的情绪基调</span>
+            </Label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {Object.entries(STYLE_LABELS).map(([key, info]) => (
+                <button key={key} type="button" onClick={() => setSelectedStyle(key)}
+                  className={`relative flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-all duration-200 ${
+                    selectedStyle === key ? 'border-pink-400 bg-pink-50/80 shadow-sm shadow-pink-100' : 'border-stone-200 bg-white hover:border-pink-200 hover:bg-pink-50/30'
+                  }`}>
+                  {selectedStyle === key && (
+                    <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-pink-400 text-white">
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    </span>
+                  )}
+                  <span className="text-xl">{info.icon}</span>
+                  <span className={`text-sm font-medium ${selectedStyle === key ? 'text-pink-700' : 'text-stone-700'}`}>{info.label}</span>
+                  <span className="text-[11px] text-stone-400 leading-tight line-clamp-2">{info.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Setting */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium text-stone-700">
+              题材背景 <span className="text-pink-400">*</span>
+              <span className="text-xs text-stone-400 ml-2 font-normal">决定故事的世界观</span>
+            </Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {Object.entries(SETTING_LABELS).map(([key, info]) => (
+                <button key={key} type="button" onClick={() => setSelectedSetting(key)}
+                  className={`relative flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all duration-200 ${
+                    selectedSetting === key ? 'border-pink-400 bg-pink-50/80 shadow-sm shadow-pink-100' : 'border-stone-200 bg-white hover:border-pink-200 hover:bg-pink-50/30'
+                  }`}>
+                  {selectedSetting === key && (
+                    <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-pink-400 text-white">
+                      <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    </span>
+                  )}
+                  <span className="text-2xl">{info.icon}</span>
+                  <span className={`text-sm font-medium ${selectedSetting === key ? 'text-pink-700' : 'text-stone-700'}`}>{info.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Synopsis */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-stone-700">
+              世界观设定 <span className="text-xs text-stone-400 ml-2 font-normal">AI 将基于此生成剧情</span>
+            </Label>
+            <Textarea placeholder="简单描述你的故事设定、主角、世界观..." maxLength={200} rows={3} value={synopsis} onChange={(e) => setSynopsis(e.target.value)}
+              className="bg-stone-50 border-stone-200 focus:border-pink-300 focus:ring-pink-200/50 resize-none text-stone-800 placeholder:text-stone-400" />
+            <p className="text-[11px] text-stone-400 text-right">{synopsis.length}/200</p>
+          </div>
+
+          {/* Cover Upload (optional) */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-stone-700">
+              作品封面 <span className="text-xs text-stone-400 ml-2 font-normal">可选，后期可添加</span>
+            </Label>
+            <input ref={coverInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleCoverSelect} className="hidden" />
+            {coverPreview ? (
+              <div className="relative rounded-lg overflow-hidden border border-pink-200">
+                <img src={coverPreview} alt="封面预览" className="w-full aspect-[16/10] object-cover" />
+                <button onClick={() => { setCoverPreview(null); if (coverInputRef.current) coverInputRef.current.value = '' }} className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">✕</button>
+              </div>
+            ) : (
+              <div onClick={() => coverInputRef.current?.click()} className="flex items-center justify-center rounded-lg border-2 border-dashed border-stone-200 bg-stone-50/50 py-6 cursor-pointer hover:border-pink-200 hover:bg-pink-50/30 transition-all">
+                <div className="text-center">
+                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-pink-50 mx-auto"><Plus className="h-5 w-5 text-pink-400" /></div>
+                  <p className="text-sm text-stone-500">点击上传封面图片</p>
+                  <p className="text-[11px] text-stone-400 mt-1">支持 JPG、PNG，建议比例 16:10</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-stone-100">
+          <Button variant="outline" onClick={onClose} className="border-stone-200 text-stone-600 hover:bg-stone-50">取消</Button>
+          <Button onClick={() => { if (name.trim()) { onSave(project!.id, { name: name.trim(), style: selectedStyle, setting: selectedSetting, synopsis }); } }} disabled={!name.trim()}
+            className="bg-gradient-to-r from-pink-400 to-violet-400 hover:from-pink-500 hover:to-violet-500 text-white shadow-md shadow-pink-200/50">
+            <Sparkles className="mr-2 h-4 w-4" />保存设置</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 // ========== Helper Functions ==========

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/auth-provider'
 import { cn } from '@/lib/utils'
@@ -179,6 +180,11 @@ export default function LandingPage() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Handle CTA click - check auth
+  const handleStartCreate = useCallback(() => {
+    if (user) { router.push('/dashboard') } else { openAuth() }
+  }, [user, router, openAuth])
+
   // Handle style selection
   const handleStyleSelect = useCallback((style: StoryStyle) => {
     setSelectedStyle(style)
@@ -187,15 +193,6 @@ export default function LandingPage() {
       setPhase('showcase')
     }, 1200)
   }, [])
-
-  // Handle CTA click - check auth
-  const handleStartCreate = useCallback(() => {
-    if (!user) {
-      openAuth()
-    } else {
-      router.push('/dashboard')
-    }
-  }, [user, openAuth, router])
 
   const theme = selectedStyle ? styles[selectedStyle] : null
 
