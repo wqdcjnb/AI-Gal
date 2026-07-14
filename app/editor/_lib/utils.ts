@@ -68,7 +68,7 @@ export const generateMockSubSections = (chapter: Chapter): SubSection[] => {
 }
 
 // Mock AI outline generator
-export const generateMockOutline = (projectName: string, narrativeStructure: string, count: number, description?: string, _requirements?: string): Chapter[] => {
+export const generateMockOutline = (projectName: string, narrativeStructure: string, count: number, _description?: string, _requirements?: string): Chapter[] => {
   const commonRouteTemplates = [
     { title: '序章 - 命运的开端', scenes: ['教室', '上学路'], keyPoints: ['主人公的日常介绍', '故事背景铺垫'] },
     { title: '相遇', scenes: ['樱花树下', '教室'], keyPoints: ['与女主角初次相遇', '留下深刻印象'] },
@@ -77,45 +77,64 @@ export const generateMockOutline = (projectName: string, narrativeStructure: str
   ]
 
   const branchTemplates = [
-    { title: '波折', scenes: ['学校', '家中'], keyPoints: ['突发事件打破平衡', '面临选择'], endingType: undefined as 'GE' | 'NE' | 'BE' | 'TE' | undefined }
+    { title: '波折', scenes: ['学校', '家中'], keyPoints: ['突发事件打破平衡', '面临选择'] }
   ]
 
-  const endingTemplates = {
-    a: { title: '樱花线 - 重逢', scenes: ['樱花树下'], keyPoints: ['解开心结', '重逢'], endingType: 'GE' as const },
-    b: { title: '雪乃线 - 告别', scenes: ['车站'], keyPoints: ['选择离开', '留下回忆'], endingType: 'NE' as const },
-  }
-
-  const chapters: Chapter[] = []
   const isBranching = narrativeStructure === '分支叙事' || narrativeStructure === '多结局'
   const isMultiEnding = narrativeStructure === '多结局'
+  const chapters: Chapter[] = []
 
   if (isMultiEnding) {
-    // Multi-ending mode: no common route, just separate routes with endings
-    const routes: Array<'a' | 'b' | 'true'> = ['a', 'b', 'true']
-    const chaptersPerRoute = Math.max(1, Math.floor(count / routes.length))
-    const endingTypes: Array<'GE' | 'NE' | 'BE' | 'TE'> = ['GE', 'NE', 'TE']
+    // Multi-ending mode: linear chapters WITHOUT route labels (no 共通线 / A线 / B线)
+    // Endings are separate chapters appended after the main story
+    const multiEndingTemplates = [
+      { title: '序章 - 命运的开端', scenes: ['教室', '上学路'], keyPoints: ['主人公的日常介绍', '故事背景铺垫'] },
+      { title: '相遇', scenes: ['樱花树下', '教室'], keyPoints: ['与女主角初次相遇', '留下深刻印象'] },
+      { title: '日常的变化', scenes: ['社团教室', '天台'], keyPoints: ['关系逐渐建立', '发现共同兴趣'] },
+      { title: '心动时刻', scenes: ['放学路', '公园'], keyPoints: ['情感悄悄萌芽', '意识到特别的存在'] },
+      { title: '波折', scenes: ['学校', '家中'], keyPoints: ['突发事件打破平衡', '面临选择'] },
+      { title: '转折', scenes: ['天台', '黄昏'], keyPoints: ['关键事件发生', '命运的分岔路'] },
+      { title: '追逐', scenes: ['街头', '车站'], keyPoints: ['追赶重要的人', '做出决定'] },
+      { title: '表白', scenes: ['河边', '星空下'], keyPoints: ['倾诉真心', '回应心意'] },
+      { title: '考验', scenes: ['未知', '内心'], keyPoints: ['最后的困难', '坚强面对'] },
+      { title: '选择', scenes: ['熟悉的教室'], keyPoints: ['最终的选择时刻', '故事走向结局'] },
+    ]
 
-    for (let r = 0; r < routes.length; r++) {
-      const routeKey = routes[r]
-      for (let i = 0; i < chaptersPerRoute; i++) {
-        const isLast = i === chaptersPerRoute - 1
-        const chapterNum = r * chaptersPerRoute + i + 1
-        const template = isLast ? endingTemplates[routeKey as 'a' | 'b'] || branchTemplates[0] : branchTemplates[0]
+    for (let i = 0; i < count; i++) {
+      const template = multiEndingTemplates[i % multiEndingTemplates.length]
+      chapters.push({
+        id: `ch-${Date.now()}-${i}`,
+        number: i + 1,
+        title: `第${i + 1}章`,
+        summary: `${template.title}的故事内容...`,
+        scenes: template.scenes,
+        keyPoints: template.keyPoints.map((text, idx) => ({ id: `kp-${i}-${idx}`, text })),
+      })
+    }
 
-        chapters.push({
-          id: `ch-${Date.now()}-${chapterNum}`,
-          number: chapterNum,
-          title: `第${chapterNum}章`,
-          summary: isLast ? `${routeKey}路线结局...` : `${routeKey}路线第${i + 1}章...`,
-          scenes: [],
-          keyPoints: template.keyPoints.map((text, idx) => ({ id: `kp-${chapterNum}-${idx}`, text })),
-          route: routeKey,
-          endingType: isLast ? (endingTypes[r] || 'GE') : undefined,
-        })
-      }
+    // Append ending chapters AFTER the main chapters (not counted in chapterCount)
+    const endingChapterTemplates: Array<{ title: string; scenes: string[]; keyPoints: string[]; endingType: 'GE' | 'NE' | 'BE' | 'TE' }> = [
+      { title: '美好结局', scenes: ['樱花树下'], keyPoints: ['最终抉择', '幸福结局'], endingType: 'GE' },
+      { title: '平凡结局', scenes: ['教室'], keyPoints: ['回归日常', '留下回忆'], endingType: 'NE' },
+      { title: '悲伤结局', scenes: ['雨中'], keyPoints: ['无法挽回', '命运弄人'], endingType: 'BE' },
+      { title: '真结局', scenes: ['星夜'], keyPoints: ['揭开真相', '真正的结局'], endingType: 'TE' },
+    ]
+
+    for (let e = 0; e < endingChapterTemplates.length; e++) {
+      const tpl = endingChapterTemplates[e]
+      const chapterNum = count + e + 1
+      chapters.push({
+        id: `ch-ending-${Date.now()}-${e}`,
+        number: chapterNum,
+        title: tpl.title,
+        summary: tpl.keyPoints.join('，') + '…',
+        scenes: tpl.scenes,
+        keyPoints: tpl.keyPoints.map((text, idx) => ({ id: `kp-end-${e}-${idx}`, text })),
+        endingType: tpl.endingType,
+      })
     }
   } else if (isBranching) {
-    // Branching mode: common route (2-3 chapters) + personal routes (3-5 chapters each)
+    // Branching mode: common route + A/B/C/True routes (no endingType — endings are only for multi-ending)
     const commonCount = Math.min(3, Math.max(2, Math.floor(count / 4)))
     for (let i = 0; i < commonCount; i++) {
       const template = commonRouteTemplates[i % commonRouteTemplates.length]
@@ -133,37 +152,35 @@ export const generateMockOutline = (projectName: string, narrativeStructure: str
     // Branch point
     const branchChapter = chapters[commonCount - 1]
 
-    // Personal routes: each route gets 3-5 chapters
+    // Personal routes: A/B 线 (no endingType)
     const routes: Array<'a' | 'b'> = ['a', 'b']
     const remainingChapters = count - commonCount
-    const chaptersPerRoute = Math.max(3, Math.floor(remainingChapters / routes.length))
+    const chaptersPerRoute = Math.max(2, Math.floor(remainingChapters / routes.length))
 
     for (let r = 0; r < routes.length; r++) {
       const routeKey = routes[r]
+      const routeName = routeKey === 'a' ? 'A线' : 'B线'
 
       for (let i = 0; i < chaptersPerRoute; i++) {
-        const isLast = i === chaptersPerRoute - 1
-        const template = isLast ? endingTemplates[routeKey] : branchTemplates[0]
         const chapterNum = commonCount + r * chaptersPerRoute + i + 1
+        const template = branchTemplates[i % branchTemplates.length]
 
         chapters.push({
           id: `ch-${Date.now()}-${chapterNum}`,
           number: chapterNum,
           title: `第${chapterNum}章`,
-          summary: `${template.title}的故事内容...`,
+          summary: `${routeName} 第${i + 1}章…`,
           scenes: template.scenes,
           keyPoints: template.keyPoints.map((text, idx) => ({ id: `kp-${chapterNum}-${idx}`, text })),
           route: routeKey,
-          endingType: isLast ? template.endingType : undefined,
           branchFrom: branchChapter.id,
         })
       }
     }
   } else {
-    // Linear narrative
+    // Linear narrative: sequential chapters, common route only
     for (let i = 0; i < count; i++) {
       const template = commonRouteTemplates[i % commonRouteTemplates.length]
-      const isLast = i === count - 1
       chapters.push({
         id: `ch-${Date.now()}-${i}`,
         number: i + 1,
@@ -172,7 +189,6 @@ export const generateMockOutline = (projectName: string, narrativeStructure: str
         scenes: template.scenes,
         keyPoints: template.keyPoints.map((text, idx) => ({ id: `kp-${i}-${idx}`, text })),
         route: 'common',
-        endingType: isLast ? 'GE' : undefined,
       })
     }
   }

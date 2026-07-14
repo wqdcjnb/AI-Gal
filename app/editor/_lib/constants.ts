@@ -5,7 +5,7 @@ export const tabs = [
   { id: 'outline', label: '大纲', icon: FileText },
   { id: 'chapter', label: '章节', icon: BookOpen },
   { id: 'characters', label: '角色', icon: Users },
-  { id: 'asset', label: '素材', icon: Image },
+  { id: 'assets', label: '素材', icon: Image },
 ]
 
 // Route labels

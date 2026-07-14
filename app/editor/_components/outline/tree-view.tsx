@@ -40,16 +40,18 @@ export function TreeView({
   const allRoutes = [...new Set(chapters.map(ch => ch.route).filter(Boolean))] as string[]
   const hasBranches = routeAChapters.length > 0 || routeBChapters.length > 0 || allRoutes.length > 2
 
-  // For multi-ending mode, show simple list without route colors
+  // For multi-ending mode, show simple list without route colors or endings
   if (isMultiEnding) {
+    const mainChapters = chapters.filter(ch => !ch.endingType)
+
     return (
       <div className="space-y-3">
-        {chapters.map((chapter, idx) => (
+        {mainChapters.map((chapter, idx) => (
           <ChapterCard key={chapter.id} {...props} chapter={chapter} index={idx} compact isMultiEnding />
         ))}
 
         {/* Empty state */}
-        {chapters.length === 0 && (
+        {mainChapters.length === 0 && (
           <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-8 text-center">
             <p className="text-sm text-muted-foreground">暂无章节，点击「AI 生成大纲」或「添加章节」开始创作</p>
           </div>
