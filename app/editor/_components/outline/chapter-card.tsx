@@ -21,6 +21,7 @@ export function ChapterCard({
   onAddKeyPoint,
   onDeleteKeyPoint,
   onKeyPointClick,
+  cardColors,
 }: ChapterCardProps) {
   const { requestDeleteChapter } = useProject()
   const routeInfo = chapter.route ? routeLabels[chapter.route] : null
@@ -28,8 +29,8 @@ export function ChapterCard({
   const [localSummary, setLocalSummary] = useState(chapter.summary)
   const isCommonRoute = chapter.route === 'common'
 
-  // Color scheme based on route
-  const colors = isCommonRoute ? {
+  // Color scheme based on route, with optional override
+  const colors = cardColors || (isCommonRoute ? ({
     border: 'border-blue-100',
     shadow: 'hover:shadow-blue-100/50',
     numberBg: 'from-blue-100 to-sky-100',
@@ -38,7 +39,7 @@ export function ChapterCard({
     hoverBg: 'hover:bg-blue-50',
     buttonText: 'text-blue-500 hover:text-blue-600',
     focusRing: 'focus:bg-blue-50',
-  } : {
+  }) : ({
     border: 'border-pink-100',
     shadow: 'hover:shadow-pink-100/50',
     numberBg: 'from-pink-100 to-violet-100',
@@ -47,7 +48,7 @@ export function ChapterCard({
     hoverBg: 'hover:bg-pink-50',
     buttonText: 'text-pink-500 hover:text-pink-600',
     focusRing: 'focus:bg-pink-50',
-  }
+  }))
 
   // Sync local summary when chapter changes
   useEffect(() => {

@@ -17,50 +17,57 @@ export const toChineseNumber = (num: number): string => {
 export const generateMockSubSections = (chapter: Chapter): SubSection[] => {
   const subSections: SubSection[] = []
 
-  // Generate 2-3 sub-sections per chapter based on key points
-  const subSectionCount = Math.max(2, Math.min(chapter.keyPoints.length || 2, 3))
-  for (let i = 0; i < subSectionCount; i++) {
-    const dialogues: DialogueLine[] = [
-      {
-        id: `d-${chapter.id}-${i}-1`,
-        type: 'narration',
-        content: `${chapter.scenes[i] || '场景' + (i + 1)}。阳光透过窗户洒进教室，空气中弥漫着青春的气息。`,
-      },
-      {
-        id: `d-${chapter.id}-${i}-2`,
-        type: 'dialogue',
-        characterId: 'c1',
-        characterName: '桜',
-        content: chapter.keyPoints[i]?.text || '今天的天气真好呢...',
-      },
-      {
-        id: `d-${chapter.id}-${i}-3`,
-        type: 'dialogue',
-        characterId: 'c2',
-        characterName: '主人公',
-        content: '（她的笑容如同春日暖阳，让人不自觉地放松下来。）',
-      },
-    ]
+  const lines = [
+    {
+      dialogues: [
+        { t: 'narration' as const, c: '午后的阳光透过窗户洒进教室，空气中弥漫着慵懒的气息。' },
+        { t: 'dialogue' as const, cid: 'c1', cn: '桜', c: '今天的天气真好呢，要不要一起回家？' },
+        { t: 'dialogue' as const, cid: 'c2', cn: '主人公', c: '好啊，正好我也有空。' },
+      ],
+    },
+    {
+      dialogues: [
+        { t: 'narration' as const, c: '走廊里回荡着脚步声，远处传来社团活动的喧闹声。' },
+        { t: 'dialogue' as const, cid: 'c3', cn: '雪乃', c: '你来了啊，我还以为你今天不会来了。' },
+        { t: 'dialogue' as const, cid: 'c1', cn: '桜', c: '抱歉让大家久等了，我们开始吧。' },
+        { t: 'choice' as const, c: '接下来要做什么？', choices: [
+          { text: '去图书馆找资料' },
+          { text: '去天台吹吹风' },
+          { text: '…还是回去吧' },
+        ]},
+      ],
+    },
+    {
+      dialogues: [
+        { t: 'narration' as const, c: '夕阳染红了整片天空，校园里的樱花在微风中轻轻摇曳。' },
+        { t: 'dialogue' as const, cid: 'c2', cn: '主人公', c: '有些话，我一直想对你说……' },
+        { t: 'dialogue' as const, cid: 'c1', cn: '桜', c: '嗯，我听着呢。' },
+        { t: 'choice' as const, c: '要怎么回应？', choices: [
+          { text: '我喜欢你' },
+          { text: '没什么…以后再说吧' },
+        ]},
+      ],
+    },
+  ]
 
-    // Add choice for the last sub-section in common route (branching point)
-    if (i === subSectionCount - 1 && chapter.route === 'common') {
-      dialogues.push({
-        id: `d-${chapter.id}-${i}-4`,
-        type: 'choice',
-        content: '是否接受她的邀请？',
-        choices: [
-          { text: '接受邀请', targetSubSectionId: `sub-${chapter.id}-a` },
-          { text: '婉言谢绝', targetSubSectionId: `sub-${chapter.id}-b` },
-        ],
-      })
-    }
+  const subSectionCount = Math.min(lines.length, Math.max(2, chapter.keyPoints.length || 2))
+  for (let i = 0; i < subSectionCount; i++) {
+    const section = lines[i]
+    const dialogues: DialogueLine[] = section.dialogues.map((l, j) => ({
+      id: `d-${chapter.id}-${i}-${j}`,
+      type: l.t,
+      ...(l.cid ? { characterId: l.cid, characterName: l.cn } : {}),
+      content: l.c,
+      ...('choices' in l ? { choices: l.choices } : {}),
+    }))
 
     subSections.push({
       id: `sub-${chapter.id}-${i}`,
-      title: `${i + 1}. ${chapter.keyPoints[i]?.text || chapter.scenes[i] || '场景' + (i + 1)}`,
-      background: chapter.scenes[i] || '教室',
-      bgm: i === 0 ? '春日の出会い' : '日常のひととき',
+      title: `${i + 1}. ${chapter.keyPoints[i]?.text || '场景' + (i + 1)}`,
+      background: '教室-白天',
+      bgm: '春日の出会い',
       dialogues,
+      triggers: [],
     })
   }
 
@@ -109,6 +116,7 @@ export const generateMockOutline = (projectName: string, narrativeStructure: str
         summary: `${template.title}的故事内容...`,
         scenes: template.scenes,
         keyPoints: template.keyPoints.map((text, idx) => ({ id: `kp-${i}-${idx}`, text })),
+        route: 'common',
       })
     }
 
@@ -120,9 +128,10 @@ export const generateMockOutline = (projectName: string, narrativeStructure: str
       { title: '真结局', scenes: ['星夜'], keyPoints: ['揭开真相', '真正的结局'], endingType: 'TE' },
     ]
 
+    const endingRoutes = ['Good End', 'Normal End', 'Bad End', 'True End']
     for (let e = 0; e < endingChapterTemplates.length; e++) {
       const tpl = endingChapterTemplates[e]
-      const chapterNum = count + e + 1
+      const chapterNum = count + 1
       chapters.push({
         id: `ch-ending-${Date.now()}-${e}`,
         number: chapterNum,
@@ -130,7 +139,8 @@ export const generateMockOutline = (projectName: string, narrativeStructure: str
         summary: tpl.keyPoints.join('，') + '…',
         scenes: tpl.scenes,
         keyPoints: tpl.keyPoints.map((text, idx) => ({ id: `kp-end-${e}-${idx}`, text })),
-        endingType: tpl.endingType,
+        route: endingRoutes[e],
+        endingType: endingRoutes[e],
       })
     }
   } else if (isBranching) {

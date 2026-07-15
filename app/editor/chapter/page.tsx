@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { BookOpen, Plus, Sparkles, GitBranch, ChevronDown } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { BookOpen, ChevronDown, ArrowLeft, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProject } from '@/app/editor/_components/project-provider'
 import { routeLabels, endingLabels } from '@/app/editor/_lib/constants'
 import { toChineseNumber, generateMockSubSections } from '@/app/editor/_lib/utils'
-import { mockCharacters } from '@/app/editor/_lib/mock-data'
-import type { SubSection, Chapter } from '@/app/editor/_lib/types'
+import type { SubSection } from '@/app/editor/_lib/types'
 import { SubSectionCard } from '@/app/editor/_components/chapter/subsection-card'
 
 export default function ChapterPage() {
@@ -18,17 +17,42 @@ export default function ChapterPage() {
   )
   const [subSections, setSubSections] = useState<SubSection[]>([])
   const [expandedSubSection, setExpandedSubSection] = useState<string | null>(null)
+  const [selectedSubSectionId, setSelectedSubSectionId] = useState<string | null>(null)
   const [collapsedRoutes, setCollapsedRoutes] = useState<Set<string>>(new Set())
+  const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(new Set())
 
-  // Generate mock sub-sections when chapter changes
+  // Pre-generate sub-sections for ALL chapters (for sidebar display)
+  const allSubSections = useMemo(() => {
+    if (!project) return {} as Record<string, SubSection[]>
+    const map: Record<string, SubSection[]> = {}
+    project.chapters.forEach(ch => {
+      map[ch.id] = generateMockSubSections(ch)
+    })
+    return map
+  }, [project])
+
+  const toggleChapter = (chapterId: string) => {
+    setCollapsedChapters(prev => {
+      const next = new Set(prev)
+      if (next.has(chapterId)) next.delete(chapterId)
+      else next.add(chapterId)
+      return next
+    })
+  }
+
+  // Click a sub-section in sidebar → select chapter + that sub-section
+  const handleSubSectionClick = (chapterId: string, subSectionId: string) => {
+    setSelectedChapterId(chapterId)
+    setExpandedSubSection(subSectionId)
+    setSelectedSubSectionId(subSectionId)
+  }
+
+  // Sync center panel sub-sections from pre-generated map
   useEffect(() => {
-    const chapter = project?.chapters.find(c => c.id === selectedChapterId)
-    if (chapter) {
-      const mockSubSections = generateMockSubSections(chapter)
-      setSubSections(mockSubSections)
-      setExpandedSubSection(mockSubSections.length > 0 ? mockSubSections[0].id : null)
+    if (selectedChapterId && allSubSections[selectedChapterId]) {
+      setSubSections(allSubSections[selectedChapterId])
     }
-  }, [selectedChapterId, project?.chapters])
+  }, [selectedChapterId, allSubSections])
 
   if (!project) return null
 
@@ -89,7 +113,7 @@ export default function ChapterPage() {
   return (
     <div className="flex h-full">
       {/* Left Sidebar - Chapter List */}
-      <div className="w-60 shrink-0 border-r border-border bg-card flex flex-col">
+      <div className="w-64 shrink-0 border-r border-border bg-card flex flex-col">
         <div className="border-b border-border px-3 py-2.5 shrink-0">
           <h3 className="text-sm font-medium text-foreground">章节列表</h3>
         </div>
@@ -126,30 +150,60 @@ export default function ChapterPage() {
                           const dispNum = commonChapters.length > 0 && group.key !== 'common'
                             ? commonChapters.length + group.chapters.findIndex(ch => ch.id === chapter.id) + 1
                             : group.chapters.findIndex(ch => ch.id === chapter.id) + 1
+                          const isExpanded = !collapsedChapters.has(chapter.id)
+                          const chapterSubs = allSubSections[chapter.id] || []
                           return (
-                            <button
-                              key={chapter.id}
-                              onClick={() => setSelectedChapterId(chapter.id)}
-                              className={cn(
-                                'w-full rounded-lg px-2.5 py-2 text-left transition-all border',
-                                isSelected
-                                  ? cn('shadow-sm', rc.bg, rc.border)
-                                  : 'border-transparent hover:bg-muted/50'
-                              )}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className={cn(
-                                  'flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-semibold',
-                                  isSelected ? rc.numberActive : rc.number
-                                )}>
-                                  {toChineseNumber(dispNum)}
+                            <div key={chapter.id}>
+                              <button
+                                onClick={() => { setSelectedChapterId(chapter.id); setSelectedSubSectionId(null) }}
+                                className={cn(
+                                  'w-full rounded-lg px-2.5 py-1.5 text-left transition-all border',
+                                  isSelected
+                                    ? cn('shadow-sm', rc.bg, rc.border)
+                                    : 'border-transparent hover:bg-muted/50'
+                                )}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                <span
+                                    onClick={(e) => { e.stopPropagation(); toggleChapter(chapter.id) }}
+                                    className={cn('p-0.5 rounded cursor-pointer transition-transform', isExpanded ? '' : '-rotate-90', rc.text)}
+                                    role="button" tabIndex={0}
+                                  >
+                                    <ChevronDown className="h-3 w-3" />
                                 </span>
-                                <span className="truncate text-xs font-medium text-foreground">{chapter.title}</span>
-                              </div>
-                              {chapter.summary && (
-                                <p className="mt-0.5 ml-7 truncate text-[10px] text-muted-foreground/60">{chapter.summary}</p>
+                                  <span className={cn(
+                                    'flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-semibold',
+                                    isSelected ? rc.numberActive : rc.number
+                                  )}>
+                                    {toChineseNumber(dispNum)}
+                                  </span>
+                                  <span className="truncate text-xs font-medium text-foreground">{chapter.title}</span>
+                                </div>
+                              </button>
+                              {/* Sub-sections */}
+                              {isExpanded && chapterSubs.length > 0 && (
+                                <div className="ml-7 mt-0.5 mb-1 space-y-0.5">
+                                  {chapterSubs.map((sub) => {
+                                    const isSubSelected = selectedSubSectionId === sub.id
+                                    return (
+                                      <button
+                                        key={sub.id}
+                                        onClick={(e) => { e.stopPropagation(); handleSubSectionClick(chapter.id, sub.id) }}
+                                        className={cn(
+                                          'w-full flex items-center gap-1.5 text-left rounded-md px-2 py-1 transition-all text-[10px] border',
+                                          isSubSelected
+                                            ? 'bg-white border-pink-200 shadow-sm text-foreground'
+                                            : 'border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                                        )}
+                                      >
+                                        <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', isSubSelected ? 'bg-pink-400' : rc.dot)} />
+                                        <span className="truncate">{sub.title}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
                               )}
-                            </button>
+                            </div>
                           )
                         })}
                       </div>
@@ -173,41 +227,64 @@ export default function ChapterPage() {
               {mainChapters.map((chapter) => {
                 const mainIdx = mainChapters.findIndex(ch => ch.id === chapter.id)
                 const isSelected = selectedChapterId === chapter.id
+                const isExpanded = !collapsedChapters.has(chapter.id)
+                const chapterSubs = allSubSections[chapter.id] || []
                 return (
-                  <button
-                    key={chapter.id}
-                    onClick={() => setSelectedChapterId(chapter.id)}
-                    className={cn(
-                      'w-full rounded-lg px-3 py-2.5 text-left transition-all border',
-                      isSelected
-                        ? 'bg-pink-50 border-pink-200 shadow-sm'
-                        : 'border-transparent hover:bg-muted/50'
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className={cn(
-                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold',
+                  <div key={chapter.id}>
+                    <button
+                      onClick={() => { setSelectedChapterId(chapter.id); setSelectedSubSectionId(null) }}
+                      className={cn(
+                        'w-full rounded-lg px-3 py-2.5 text-left transition-all border',
                         isSelected
-                          ? 'bg-gradient-to-br from-pink-400 to-violet-400 text-white shadow-sm'
-                          : 'bg-gradient-to-br from-pink-100 to-violet-100 text-pink-700'
-                      )}>
-                        {toChineseNumber(mainIdx + 1)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <span className="truncate text-sm font-medium text-foreground">{chapter.title}</span>
-                        <div className="mt-1 flex items-center gap-1.5">
-                          {chapter.route && (
-                            <span className={cn('rounded px-1.5 py-0.5 text-[10px]', routeLabels[chapter.route]?.color)}>
-                              {routeLabels[chapter.route]?.label}
-                            </span>
-                          )}
-                          {chapter.summary && (
-                            <span className="truncate text-[11px] text-muted-foreground/60">{chapter.summary}</span>
-                          )}
+                          ? 'bg-pink-50 border-pink-200 shadow-sm'
+                          : 'border-transparent hover:bg-muted/50'
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          onClick={(e) => { e.stopPropagation(); toggleChapter(chapter.id) }}
+                          className={cn('p-0.5 rounded cursor-pointer transition-transform', isExpanded ? '' : '-rotate-90', 'text-pink-400')}
+                          role="button" tabIndex={0}
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </span>
+                        <span className={cn(
+                          'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold',
+                          isSelected
+                            ? 'bg-gradient-to-br from-pink-400 to-violet-400 text-white shadow-sm'
+                            : 'bg-gradient-to-br from-pink-100 to-violet-100 text-pink-700'
+                        )}>
+                          {toChineseNumber(mainIdx + 1)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <span className="truncate text-sm font-medium text-foreground">{chapter.title}</span>
                         </div>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+                    {/* Sub-sections */}
+                    {isExpanded && chapterSubs.length > 0 && (
+                      <div className="ml-10 mt-0.5 mb-1 space-y-0.5">
+                        {chapterSubs.map((sub) => {
+                          const isSubSelected = selectedSubSectionId === sub.id
+                          return (
+                            <button
+                              key={sub.id}
+                              onClick={(e) => { e.stopPropagation(); handleSubSectionClick(chapter.id, sub.id) }}
+                              className={cn(
+                                'w-full flex items-center gap-1.5 text-left rounded-md px-2 py-1 transition-all text-[10px] border',
+                                isSubSelected
+                                  ? 'bg-white border-pink-200 shadow-sm text-foreground'
+                                  : 'border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                              )}
+                            >
+                              <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', isSubSelected ? 'bg-pink-400' : 'bg-pink-300')} />
+                              <span className="truncate">{sub.title}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -261,76 +338,34 @@ export default function ChapterPage() {
         </div>
       </div>
 
-      {/* Center - Sub-section Editor */}
+      {/* Center Panel */}
       <div className="flex-1 overflow-y-auto bg-background p-6">
         {selectedChapter ? (
-          <div>
-            {/* Chapter Header */}
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-foreground">{selectedChapter.title}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{selectedChapter.summary}</p>
-            </div>
-
-            {/* Choice Density Stats */}
-            {(() => {
-              const allChoices = subSections.flatMap(ss =>
-                ss.dialogues.filter(d => d.type === 'choice' && d.choices).flatMap(d => d.choices || [])
-              )
-              const totalChoices = allChoices.length
-
-              if (totalChoices === 0) return null
-
-              return (
-                <div className="mb-6 rounded-xl border border-border bg-gradient-to-r from-pink-50/50 via-white to-violet-50/50 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <GitBranch className="h-4 w-4 text-pink-500" />
-                    <span className="text-sm font-medium text-foreground">选择肢统计</span>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {totalChoices < subSections.length * 0.5 ? '选择肢较少，接近线性阅读体验' :
-                       totalChoices < subSections.length * 1.5 ? '选择肢密度适中，平衡互动与叙事' :
-                       '选择肢密集，高互动性叙事'}
-                    </span>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-pink-600">{totalChoices}</div>
-                    <div className="text-xs text-muted-foreground">总选择肢</div>
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* Sub-sections List */}
-            <div className="space-y-4">
-              {subSections.map((subSection, subIndex) => (
-                <SubSectionCard
-                  key={subSection.id}
-                  subSection={subSection}
-                  index={subIndex}
-                  isExpanded={expandedSubSection === subSection.id}
-                  onToggle={() => setExpandedSubSection(
-                    expandedSubSection === subSection.id ? null : subSection.id
-                  )}
-                  onUpdate={(updated) => {
-                    setSubSections(prev => prev.map(ss => ss.id === subSection.id ? updated : ss))
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Add Sub-section Button */}
-            <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-4 text-muted-foreground hover:border-pink-300 hover:text-pink-600 transition-colors">
-              <Plus className="h-5 w-5" />
-              添加小节
-            </button>
-
-            {/* AI Generate Button */}
-            <div className="mt-4 flex justify-center">
-              <button className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 px-6 py-3 text-sm font-medium text-white shadow-sm hover:shadow-md transition-all">
-                <Sparkles className="h-4 w-4" />
-                AI 生成整章内容
-              </button>
-            </div>
-          </div>
+          selectedSubSectionId ? (
+            /* ── Sub-section Editor Mode ── */
+            <SubSectionEditor
+              subSection={subSections.find(ss => ss.id === selectedSubSectionId)!}
+              allSubSections={Object.entries(allSubSections).map(([chId, subs]) => {
+                const ch = project?.chapters.find(c => c.id === chId)
+                return {
+                  value: chId,
+                  label: ch ? `第${toChineseNumber(ch.number)}章 ${ch.title}` : chId,
+                  children: subs.map(s => ({ value: s.id, label: s.title })),
+                }
+              })}
+              onBack={() => setSelectedSubSectionId(null)}
+              onUpdate={(updated) => {
+                setSubSections(prev => prev.map(ss => ss.id === updated.id ? updated : ss))
+              }}
+            />
+          ) : (
+            /* ── Chapter Overview Mode ── */
+            <ChapterOverview
+              chapter={selectedChapter}
+              subSections={subSections}
+              onSubSectionClick={(subId) => handleSubSectionClick(selectedChapter.id, subId)}
+            />
+          )
         ) : (
           <div className="flex h-full items-center justify-center">
             <p className="text-muted-foreground">请选择一个章节</p>
@@ -338,35 +373,89 @@ export default function ChapterPage() {
         )}
       </div>
 
-      {/* Right Sidebar - Character Panel */}
-      <div className="w-56 shrink-0 border-l border-border bg-card">
-        <div className="border-b border-border p-3">
-          <h3 className="text-sm font-medium text-foreground">角色</h3>
-        </div>
-        <div className="p-3 space-y-2">
-          {mockCharacters.map((char) => (
-            <div
-              key={char.id}
-              className="flex items-center gap-3 rounded-lg p-2 hover:bg-muted/50 cursor-pointer"
-            >
-              <div
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white font-medium"
-                style={{ backgroundColor: char.color }}
-              >
-                {char.name[0]}
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{char.name}</p>
-                <p className="text-xs text-muted-foreground">未出场</p>
-              </div>
-            </div>
-          ))}
-          <button className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border p-2 text-sm text-muted-foreground hover:border-pink-300 hover:text-pink-600">
-            <Plus className="h-4 w-4" />
-            添加角色
-          </button>
-        </div>
+    </div>
+  )
+}
+
+// ── Chapter Overview: sub-section preview cards ──
+function ChapterOverview({
+  chapter,
+  subSections,
+  onSubSectionClick,
+}: {
+  chapter: { title: string; summary: string }
+  subSections: SubSection[]
+  onSubSectionClick: (subId: string) => void
+}) {
+  return (
+    <div>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-foreground">{chapter.title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{chapter.summary}</p>
       </div>
+      <div className="space-y-3">
+        {subSections.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-12">暂无小节</p>
+        ) : (
+          subSections.map((ss, idx) => (
+            <button
+              key={ss.id}
+              onClick={() => onSubSectionClick(ss.id)}
+              className="w-full rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow border-border text-left"
+            >
+              <div className="flex items-center gap-3 p-4">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold bg-gradient-to-br from-pink-100 to-violet-100 text-pink-600">
+                  {idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-foreground truncate">{ss.title}</h4>
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <MessageSquare className="h-3 w-3" />
+                    {ss.dialogues.length} 条对话
+                  </span>
+                </div>
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Sub-section Editor: single full card, always expanded ──
+function SubSectionEditor({
+  subSection,
+  onBack,
+  onUpdate,
+  allSubSections,
+}: {
+  subSection: SubSection | undefined
+  onBack: () => void
+  onUpdate: (updated: SubSection) => void
+  allSubSections: { value: string; label: string; children?: { value: string; label: string }[] }[]
+}) {
+  if (!subSection) return null
+
+  // Flatten for DialogueCard subSectionIds
+  const flatIds = allSubSections.flatMap(ch => ch.children || [])
+
+  return (
+    <div>
+      <button onClick={onBack}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
+        <ArrowLeft className="h-4 w-4" />返回章节总览
+      </button>
+
+      <SubSectionCard
+        subSection={subSection}
+        index={0}
+        isExpanded={true}
+        onToggle={() => {}}
+        onUpdate={onUpdate}
+        allSubSections={flatIds}
+        subSectionTree={allSubSections}
+      />
     </div>
   )
 }

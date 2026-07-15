@@ -1,16 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Sparkles, Loader2, Flag, Trash2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Sparkles, Loader2 } from 'lucide-react'
 import { useProject } from '@/app/editor/_components/project-provider'
-import { endingLabels } from '@/app/editor/_lib/constants'
 import { toChineseNumber } from '@/app/editor/_lib/utils'
-import type { KeyPoint, Ending } from '@/app/editor/_lib/types'
+import type { KeyPoint } from '@/app/editor/_lib/types'
 import { TimelineView } from '@/app/editor/_components/outline/timeline-view'
 import { TreeView } from '@/app/editor/_components/outline/tree-view'
 import { KeyPointModal } from '@/app/editor/_components/outline/keypoint-modal'
-import { EndingModal } from '@/app/editor/_components/outline/ending-modal'
 import { AddRouteDialog } from '@/app/editor/_components/outline/add-route-dialog'
 import { EmptyOutline } from '@/app/editor/_components/outline/empty-outline'
 import { GeneratingSkeleton } from '@/app/editor/_components/outline/generating-skeleton'
@@ -20,6 +17,7 @@ export default function OutlinePage() {
     project,
     isGenerating,
     handleGenerateOutline,
+    saveProject,
     addChapter,
     requestDeleteChapter,
     addKeyPoint,
@@ -27,13 +25,8 @@ export default function OutlinePage() {
     updateKeyPointData,
     deleteKeyPoint,
     addRoute,
-    addEnding,
-    updateEnding,
-    requestDeleteEnding,
     handleAIGenerateKeyPoint,
     isGeneratingKeyPoint,
-    handleAIGenerateEnding,
-    isGeneratingEnding,
     editingChapterId,
     editTitle,
     editSummary,
@@ -53,9 +46,6 @@ export default function OutlinePage() {
   const [addRouteDialogOpen, setAddRouteDialogOpen] = useState(false)
   const [editRouteDialogOpen, setEditRouteDialogOpen] = useState(false)
   const [editingRoute, setEditingRoute] = useState<string | null>(null)
-  const [endingModalOpen, setEndingModalOpen] = useState(false)
-  const [selectedEnding, setSelectedEnding] = useState<Ending | null>(null)
-  const [isNewEnding, setIsNewEnding] = useState(false)
 
   if (!project) return null
 
@@ -92,44 +82,6 @@ export default function OutlinePage() {
     }
     setSelectedKeyPoint(null)
     setIsNewKeyPoint(false)
-  }
-
-  // Ending handlers
-  const handleEndingClick = (ending: Ending) => {
-    setSelectedEnding(ending)
-    setIsNewEnding(false)
-    setEndingModalOpen(true)
-  }
-
-  const handleAddEnding = () => {
-    const endingTypes: Ending['type'][] = ['GE', 'NE', 'BE', 'TE']
-    const existingTypes = project.endings?.map((e: Ending) => e.type) || []
-    const nextType = endingTypes.find(t => !existingTypes.includes(t)) || 'GE'
-    const typeLabels: Record<Ending['type'], string> = {
-      GE: 'Good End',
-      NE: 'Normal End',
-      BE: 'Bad End',
-      TE: 'True End',
-    }
-    const newEnding: Ending = {
-      id: `end-${Date.now()}`,
-      type: nextType,
-      name: typeLabels[nextType],
-      description: '',
-    }
-    setSelectedEnding(newEnding)
-    setIsNewEnding(true)
-    setEndingModalOpen(true)
-  }
-
-  const handleEndingSave = (ending: Ending) => {
-    if (isNewEnding) {
-      addEnding(ending)
-    } else {
-      updateEnding(ending.id, ending)
-    }
-    setSelectedEnding(null)
-    setIsNewEnding(false)
   }
 
   return (
@@ -210,64 +162,6 @@ export default function OutlinePage() {
         />
       )}
 
-      {/* Add Ending Button (Multi-ending mode only) */}
-      {project.chapters.length > 0 && !isGenerating && isMultiEnding && (
-        <button
-          onClick={handleAddEnding}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-violet-200 bg-violet-50/30 py-4 text-sm font-medium text-violet-600 transition-all hover:border-violet-300 hover:bg-violet-50"
-        >
-          <Sparkles className="h-4 w-4" />
-          添加结局
-        </button>
-      )}
-
-      {/* Endings Section (Multi-ending mode only) */}
-      {isMultiEnding && (project.endings?.length ?? 0) > 0 && (
-        <div className="mt-6">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Flag className="h-4 w-4 text-violet-500" />
-            结局管理
-          </h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(project.endings || []).map((ending: Ending) => {
-              const endingConfig = endingLabels[ending.type]
-              return (
-                <div
-                  key={ending.id}
-                  onClick={() => handleEndingClick(ending)}
-                  className={cn(
-                    'group relative cursor-pointer rounded-xl border bg-white p-4 transition-all hover:shadow-md',
-                    endingConfig?.color || 'bg-gray-50 border-gray-200'
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">{endingConfig?.emoji || '🎭'}</span>
-                      <span className="text-sm font-semibold text-foreground">
-                        {endingConfig?.label || ending.type}
-                      </span>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); requestDeleteEnding(ending.id) }}
-                      className="rounded-md p-1.5 text-muted-foreground/60 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <p className="mt-2 text-sm font-medium text-foreground">{ending.name}</p>
-                  {ending.description && (
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{ending.description}</p>
-                  )}
-                  <p className="mt-2 text-[10px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                    点击编辑
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Key Point Modal */}
       <KeyPointModal
         isOpen={keyPointModalOpen}
@@ -277,16 +171,6 @@ export default function OutlinePage() {
         onSave={handleKeyPointSave}
         onAIGenerate={handleAIGenerateKeyPoint}
         isGenerating={isGeneratingKeyPoint}
-      />
-
-      {/* Ending Modal */}
-      <EndingModal
-        isOpen={endingModalOpen}
-        onClose={() => setEndingModalOpen(false)}
-        ending={selectedEnding}
-        onSave={handleEndingSave}
-        onAIGenerate={handleAIGenerateEnding}
-        isGenerating={isGeneratingEnding}
       />
 
       {/* AI Generate Dialog */}
@@ -347,9 +231,10 @@ export default function OutlinePage() {
       {/* Add Route Dialog */}
       <AddRouteDialog
         isOpen={addRouteDialogOpen}
+        isEndingMode={isMultiEnding}
         onClose={() => setAddRouteDialogOpen(false)}
-        onSave={(routeName, description, chapterCount) => {
-          addRoute(routeName, chapterCount)
+        onSave={(routeName, endingType, chapterCount) => {
+          addRoute(routeName, chapterCount, isMultiEnding ? endingType : undefined)
           setAddRouteDialogOpen(false)
         }}
         onAIGenerate={async () => {
@@ -372,22 +257,41 @@ export default function OutlinePage() {
       {/* Edit Route Dialog */}
       <AddRouteDialog
         isOpen={editRouteDialogOpen}
+        isEndingMode={isMultiEnding}
         onClose={() => {
           setEditRouteDialogOpen(false)
           setEditingRoute(null)
+        }}
+        onDelete={() => {
+          if (editingRoute) {
+            const updatedChapters = project.chapters.filter(ch => ch.route !== editingRoute)
+            saveProject({ ...project, chapters: updatedChapters })
+          }
         }}
         initialData={(() => {
           if (!editingRoute) return undefined
           const routeChapters = project.chapters.filter(ch => ch.route === editingRoute)
           if (routeChapters.length === 0) return undefined
-          const routeLabelMap: Record<string, string> = { a: 'A线', b: 'B线', c: 'C线', true: 'True线' }
           return {
-            routeName: routeLabelMap[editingRoute] || editingRoute,
+            routeName: editingRoute,
+            endingType: routeChapters[0]?.endingType || 'Good End',
             description: routeChapters[0]?.summary || '',
             chapterCount: routeChapters.length,
           }
         })()}
-        onSave={() => {
+        onSave={(routeName: string, endingType?: string) => {
+          if (isMultiEnding && (routeName !== editingRoute || endingType)) {
+            const updatedChapters = project.chapters.map(ch =>
+              ch.route === editingRoute ? { ...ch, route: routeName, endingType: endingType || ch.endingType } : ch
+            )
+            saveProject({ ...project, chapters: updatedChapters })
+          } else if (!isMultiEnding && routeName !== editingRoute) {
+            // Branching: rename route
+            const updatedChapters = project.chapters.map(ch =>
+              ch.route === editingRoute ? { ...ch, route: routeName } : ch
+            )
+            saveProject({ ...project, chapters: updatedChapters })
+          }
           setEditRouteDialogOpen(false)
           setEditingRoute(null)
         }}
@@ -407,3 +311,4 @@ export default function OutlinePage() {
     </div>
   )
 }
+

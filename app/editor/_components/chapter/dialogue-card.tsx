@@ -1,397 +1,390 @@
 'use client'
 
 import { useState } from 'react'
-import { Settings, HelpCircle, ChevronRight, ImageIcon } from 'lucide-react'
-import { mockCharacters } from '@/app/editor/_lib/mock-data'
+import { Settings, HelpCircle, Mic, X, Plus, ChevronDown, Trash2, GripVertical } from 'lucide-react'
+import { mockCharacters, mockAssets } from '@/app/editor/_lib/mock-data'
 import type { DialogueCardProps } from '@/app/editor/_lib/types'
 
-export function DialogueCard({ dialogue, index, onUpdate }: DialogueCardProps) {
+const bgmOptions = mockAssets.filter(a => a.category === 'bgm')
+const seOptions = mockAssets.filter(a => a.category === 'se')
+const cgOptions = mockAssets.filter(a => a.category === 'cg')
+const voiceOptions = mockAssets.filter(a => a.category === 'voice')
+const bgOptions = mockAssets.filter(a => a.category === 'background')
+
+const voiceEmotions = ['默认', '开心', '悲伤', '愤怒', '惊讶', '害羞', '紧张', '温柔', '冷淡']
+
+const SettingsBlock = ({ show, children }: { show: boolean; children: React.ReactNode }) => {
+  if (!show) return null
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <Settings className="h-3 w-3" />高级设置
+      </div>
+      {children}
+    </div>
+  )
+}
+
+export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionIds = [], onDragStart, onDragOver, onDrop }: DialogueCardProps) {
   const [showSettings, setShowSettings] = useState(false)
+  const [choiceCollapsed, setChoiceCollapsed] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [narrationPanelOpen, setNarrationPanelOpen] = useState(false)
+  const [dialoguePanelOpen, setDialoguePanelOpen] = useState(false)
 
-  // Check if dialogue has any presentation settings
-  const hasSettings = dialogue.spriteExpression || dialogue.bgmChange || dialogue.soundEffect || dialogue.cgTrigger || dialogue.textSpeed || (dialogue.screenEffect && dialogue.screenEffect !== 'none')
+  const hasSettings = dialogue.spriteExpression || dialogue.bgmChange || dialogue.soundEffect ||
+    dialogue.cgTrigger || (dialogue.screenEffect && dialogue.screenEffect !== 'none') ||
+    dialogue.voiceId || dialogue.voiceEmotion
 
+  // ── Narration ──
   if (dialogue.type === 'narration') {
     return (
-      <div className="group rounded-lg border border-border bg-muted/30 p-3 hover:border-pink-200">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">旁白</span>
-          <span className="text-xs text-muted-foreground">#{index + 1}</span>
-          <div className="flex items-center gap-1 ml-2">
-            {dialogue.spriteExpression && (
-              <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-600" title={`表情: ${dialogue.spriteExpression}`}>
-                🎭 {dialogue.spriteExpression}
-              </span>
-            )}
-            {dialogue.bgmChange && (
-              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-600" title={`BGM: ${dialogue.bgmChange}`}>
-                🎵
-              </span>
-            )}
-            {dialogue.soundEffect && (
-              <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] text-green-600" title={`音效: ${dialogue.soundEffect}`}>
-                🔊
-              </span>
-            )}
-            {dialogue.cgTrigger && (
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-600" title={`CG: ${dialogue.cgTrigger}`}>
-                🖼️
-              </span>
-            )}
-            {dialogue.screenEffect && dialogue.screenEffect !== 'none' && (
-              <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-600" title={`特效: ${dialogue.screenEffect}`}>
-                ⚡
-              </span>
-            )}
-          </div>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={`ml-auto rounded p-1 text-xs transition-colors ${hasSettings ? 'text-pink-500' : 'text-muted-foreground hover:text-pink-400'}`}
-          >
-            <Settings className="h-3 w-3" />
-          </button>
-        </div>
-        <p className="text-sm italic text-muted-foreground">{dialogue.content}</p>
-        {showSettings && (
-          <div className="mt-3 rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      <>
+        <div className="group rounded-lg border border-border bg-muted/30 p-3 hover:border-pink-200 cursor-pointer"
+          onClick={() => setNarrationPanelOpen(true)}
+          draggable onDragStart={(e) => onDragStart?.(e, index)} onDragOver={onDragOver} onDrop={(e) => onDrop?.(e, index)}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
+            <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">旁白</span>
+            <span className="text-xs text-muted-foreground">#{index + 1}</span>
+            <IndicatorBadges dialogue={dialogue} />
+            <div className="flex-1" />
+            <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings) }}
+              className={`rounded p-1 text-xs transition-colors ${hasSettings ? 'text-pink-500' : 'text-muted-foreground hover:text-pink-400'}`}>
               <Settings className="h-3 w-3" />
-              演出设置
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">🎭 立绘表情</label>
-                <input
-                  type="text"
-                  className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none"
-                  placeholder="如: 微笑、惊讶、哭泣"
-                  value={dialogue.spriteExpression || ''}
-                  onChange={(e) => onUpdate?.({ ...dialogue, spriteExpression: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">⏱️ 文字速度</label>
-                <select
-                  className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none"
-                  value={dialogue.textSpeed || 'normal'}
-                  onChange={(e) => onUpdate?.({ ...dialogue, textSpeed: e.target.value as 'slow' | 'normal' | 'fast' })}
-                >
-                  <option value="slow">慢速</option>
-                  <option value="normal">正常</option>
-                  <option value="fast">快速</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">🎵 BGM 变化</label>
-                <input
-                  type="text"
-                  className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none"
-                  placeholder="BGM名称"
-                  value={dialogue.bgmChange || ''}
-                  onChange={(e) => onUpdate?.({ ...dialogue, bgmChange: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">🔊 音效</label>
-                <input
-                  type="text"
-                  className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none"
-                  placeholder="如: 脚步声、开门声"
-                  value={dialogue.soundEffect || ''}
-                  onChange={(e) => onUpdate?.({ ...dialogue, soundEffect: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">🖼️ CG 触发</label>
-                <input
-                  type="text"
-                  className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none"
-                  placeholder="CG名称"
-                  value={dialogue.cgTrigger || ''}
-                  onChange={(e) => onUpdate?.({ ...dialogue, cgTrigger: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">⚡ 画面特效</label>
-                <select
-                  className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none"
-                  value={dialogue.screenEffect || 'none'}
-                  onChange={(e) => onUpdate?.({ ...dialogue, screenEffect: e.target.value as 'none' | 'shake' | 'flash_white' | 'flash_black' })}
-                >
-                  <option value="none">无</option>
-                  <option value="shake">震动</option>
-                  <option value="flash_white">闪白</option>
-                  <option value="flash_black">闪黑</option>
-                </select>
-              </div>
-            </div>
+            </button>
           </div>
+          <p className="text-sm italic text-muted-foreground line-clamp-2">{dialogue.content}</p>
+        </div>
+        <SettingsBlock show={showSettings}>
+          <PerfSettings dialogue={dialogue} onUpdate={onUpdate} />
+        </SettingsBlock>
+        {narrationPanelOpen && (
+          <NarrationEditPanel
+            dialogue={dialogue}
+            onUpdate={onUpdate}
+            onDelete={onDelete}
+            onClose={() => setNarrationPanelOpen(false)}
+          />
         )}
-      </div>
+      </>
     )
   }
 
+  // ── Choice ──
   if (dialogue.type === 'choice') {
-    const funcTypeConfig: Record<string, { icon: string; label: string; color: string }> = {
-      branch: { icon: '🔀', label: '剧情分支', color: 'bg-amber-100 text-amber-700 border-amber-200' },
-      affection: { icon: '💗', label: '好感度', color: 'bg-pink-100 text-pink-700 border-pink-200' },
-      flavor: { icon: '🎭', label: '趣味', color: 'bg-slate-100 text-slate-600 border-slate-200' },
-      trap: { icon: '⚠️', label: '陷阱', color: 'bg-red-100 text-red-700 border-red-200' },
-    }
+    const choices = dialogue.choices || []
 
     return (
-      <div className="group rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/50 p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <HelpCircle className="h-4 w-4 text-amber-600" />
-          <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">选择支</span>
-          <span className="text-xs text-muted-foreground">#{index + 1}</span>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={`ml-auto rounded p-1 text-xs transition-colors ${hasSettings ? 'text-pink-500' : 'text-muted-foreground hover:text-pink-400'}`}
-          >
-            <Settings className="h-3 w-3" />
-          </button>
+      <>
+        <div className="group rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/50 p-3 hover:border-amber-400"
+          onClick={() => setPanelOpen(true)}
+          draggable onDragStart={(e) => onDragStart?.(e, index)} onDragOver={onDragOver} onDrop={(e) => onDrop?.(e, index)}>
+          <div className="flex items-center gap-2 cursor-pointer">
+            <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
+            <HelpCircle className="h-4 w-4 text-amber-600" />
+            <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">选择</span>
+            <span className="text-xs text-muted-foreground">#{index + 1}</span>
+            <span className="text-xs text-muted-foreground">({choices.length} 个选项)</span>
+            <div className="flex-1" />
+            <button onClick={(e) => { e.stopPropagation(); setChoiceCollapsed(!choiceCollapsed) }}
+              className={`p-0.5 transition-transform ${choiceCollapsed ? '-rotate-90' : ''}`}>
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+            </button>
+          </div>
+          {!choiceCollapsed && choices.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {choices.map((c, i) => (
+                <div key={i} className="text-xs text-muted-foreground pl-6">{i + 1}. {c.text || '(空)'}</div>
+              ))}
+            </div>
+          )}
         </div>
-        <p className="text-sm font-medium text-foreground mb-3">{dialogue.content}</p>
-        {dialogue.choices && dialogue.choices.length > 0 && (
-          <div className="space-y-2">
-            {dialogue.choices.map((choice, cIndex) => {
-              const choiceType = choice.type || 'normal'
-              const funcType = choice.functionType || 'branch'
-              const funcConfig = funcTypeConfig[funcType]
-              return (
-                <div key={cIndex} className={`flex flex-col gap-1 rounded-md border px-3 py-2 ${
-                  choiceType === 'hidden' ? 'border-purple-200 bg-purple-50/50' :
-                  choiceType === 'timed' ? 'border-red-200 bg-red-50/50' :
-                  choice.isBadEnd ? 'border-red-300 bg-red-50/30' :
-                  'border-amber-200 bg-white/60'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <ChevronRight className={`h-3 w-3 shrink-0 ${
-                      choiceType === 'hidden' ? 'text-purple-600' :
-                      choiceType === 'timed' ? 'text-red-600' :
-                      choice.isBadEnd ? 'text-red-600' :
-                      'text-amber-600'
-                    }`} />
-                    <span className="text-sm text-foreground">{choice.text}</span>
-                    <span className={`rounded border px-1.5 py-0.5 text-[10px] ${funcConfig.color}`} title={funcConfig.label}>
-                      {funcConfig.icon} {funcConfig.label}
-                    </span>
-                    {choiceType === 'hidden' && (
-                      <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] text-purple-600">隐藏</span>
-                    )}
-                    {choiceType === 'timed' && choice.timeout && (
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-600">⏱ {choice.timeout}秒</span>
-                    )}
-                    {choice.isBadEnd && (
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-700 font-medium">Bad End</span>
-                    )}
-                    {choice.condition && (
-                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-600" title={`条件: ${choice.condition}`}>
-                        🔒 条件
-                      </span>
-                    )}
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      → {choice.targetSubSectionId ? `小节 ${choice.targetSubSectionId.slice(-1)}` : '未设置'}
-                    </span>
-                  </div>
-                  {choice.effects && choice.effects.length > 0 && (
-                    <div className="flex items-center gap-1 ml-5 mt-1">
-                      <span className="text-[10px] text-muted-foreground">效果:</span>
-                      {choice.effects.map((effect, eIndex) => (
-                        <span key={eIndex} className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] text-green-600">
-                          {effect.type === 'affection' ? `好感度` : 'Flag'} {effect.operator === 'add' ? '+' : effect.operator === 'subtract' ? '-' : '='} {String(effect.value)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 ml-5 mt-1">
-                    <select
-                      className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] focus:border-pink-300 focus:outline-none"
-                      value={funcType}
-                      onChange={(e) => {
-                        const newChoices = [...(dialogue.choices || [])]
-                        newChoices[cIndex] = { ...choice, functionType: e.target.value as 'branch' | 'affection' | 'flavor' | 'trap' }
-                        onUpdate?.({ ...dialogue, choices: newChoices })
-                      }}
-                    >
-                      <option value="branch">🔀 剧情分支</option>
-                      <option value="affection">💗 好感度</option>
-                      <option value="flavor">🎭 趣味</option>
-                      <option value="trap">⚠️ 陷阱</option>
-                    </select>
-                    <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="rounded border-border"
-                        checked={choice.isBadEnd || false}
-                        onChange={(e) => {
-                          const newChoices = [...(dialogue.choices || [])]
-                          newChoices[cIndex] = { ...choice, isBadEnd: e.target.checked }
-                          onUpdate?.({ ...dialogue, choices: newChoices })
-                        }}
-                      />
-                      <span className={choice.isBadEnd ? 'text-red-600' : ''}>Bad End</span>
-                    </label>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-        {showSettings && (
-          <div className="mt-3 rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Settings className="h-3 w-3" />
-              演出设置
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">🎵 BGM 变化</label>
-                <input type="text" className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" placeholder="BGM名称" value={dialogue.bgmChange || ''} onChange={(e) => onUpdate?.({ ...dialogue, bgmChange: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">🔊 音效</label>
-                <input type="text" className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" placeholder="如: 脚步声、开门声" value={dialogue.soundEffect || ''} onChange={(e) => onUpdate?.({ ...dialogue, soundEffect: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">🖼️ CG 触发</label>
-                <input type="text" className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" placeholder="CG名称" value={dialogue.cgTrigger || ''} onChange={(e) => onUpdate?.({ ...dialogue, cgTrigger: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">⚡ 画面特效</label>
-                <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" value={dialogue.screenEffect || 'none'} onChange={(e) => onUpdate?.({ ...dialogue, screenEffect: e.target.value as 'none' | 'shake' | 'flash_white' | 'flash_black' })}>
-                  <option value="none">无</option>
-                  <option value="shake">震动</option>
-                  <option value="flash_white">闪白</option>
-                  <option value="flash_black">闪黑</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+
+        {panelOpen && <ChoicePanel dialogue={dialogue} onUpdate={onUpdate} onDelete={onDelete} onClose={() => setPanelOpen(false)} />}
+      </>
     )
   }
 
-  // Character dialogue
+  // ── Character Dialogue ──
   const char = mockCharacters.find(c => c.id === dialogue.characterId)
   const charSprites = char?.sprites || []
-  const currentSprite = charSprites.find(s => s.id === dialogue.spriteId) || charSprites.find(s => s.type === 'base')
 
   return (
-    <div className="group rounded-lg border border-border bg-card p-3 hover:border-pink-200">
-      <div className="flex items-center gap-2 mb-2">
-        {char && (
-          <div
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white text-xs font-medium"
-            style={{ backgroundColor: char.color }}
-          >
-            {char.name[0]}
-          </div>
-        )}
-        <span className="text-sm font-medium" style={{ color: char?.color || '#666' }}>
-          {dialogue.characterName || '未知角色'}
-        </span>
-        <span className="text-xs text-muted-foreground">#{index + 1}</span>
-        <div className="flex items-center gap-1 ml-2">
-          {dialogue.spriteExpression && (
-            <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-600" title={`表情: ${dialogue.spriteExpression}`}>🎭 {dialogue.spriteExpression}</span>
+    <>
+      <div className="group rounded-lg border border-border bg-card p-3 hover:border-pink-200 cursor-pointer"
+        onClick={() => setDialoguePanelOpen(true)}
+        draggable onDragStart={(e) => onDragStart?.(e, index)} onDragOver={onDragOver} onDrop={(e) => onDrop?.(e, index)}>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
+          {char && (
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white text-xs font-medium" style={{ backgroundColor: char.color }}>
+              {char.name[0]}
+            </div>
           )}
-          {dialogue.bgmChange && (
-            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-600" title={`BGM: ${dialogue.bgmChange}`}>🎵</span>
-          )}
-          {dialogue.soundEffect && (
-            <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] text-green-600" title={`音效: ${dialogue.soundEffect}`}>🔊</span>
-          )}
-          {dialogue.cgTrigger && (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-600" title={`CG: ${dialogue.cgTrigger}`}>🖼️</span>
-          )}
-          {dialogue.screenEffect && dialogue.screenEffect !== 'none' && (
-            <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-600" title={`特效: ${dialogue.screenEffect}`}>⚡</span>
-          )}
-        </div>
-        {charSprites.length > 0 && (
-          <select
-            className="rounded border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground hover:border-pink-200 focus:outline-none focus:ring-1 focus:ring-pink-300"
-            value={dialogue.spriteId || currentSprite?.id || ''}
-            onChange={(e) => onUpdate?.({ ...dialogue, spriteId: e.target.value })}
-          >
-            {charSprites.map(sprite => (
-              <option key={sprite.id} value={sprite.id}>
-                {sprite.name} ({sprite.type === 'base' ? '基础' : sprite.type === 'expression' ? '表情' : sprite.type === 'outfit' ? '服装' : '动作'})
-              </option>
-            ))}
-          </select>
-        )}
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className={`ml-auto rounded p-1 text-xs transition-colors ${hasSettings ? 'text-pink-500' : 'text-muted-foreground hover:text-pink-400'}`}
-        >
-          <Settings className="h-3 w-3" />
-        </button>
-      </div>
-      <p className="text-sm text-foreground">{dialogue.content}</p>
-      {currentSprite && (
-        <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-          <ImageIcon className="h-3 w-3" />
-          <span>立绘: {currentSprite.name}</span>
-          {dialogue.spriteExpression && <span className="text-violet-500">({dialogue.spriteExpression})</span>}
-        </div>
-      )}
-      {showSettings && (
-        <div className="mt-3 rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <span className="text-sm font-medium" style={{ color: dialogue.characterColor || char?.color || '#666' }}>{dialogue.characterName || '未知角色'}</span>
+          <span className="text-xs text-muted-foreground">#{index + 1}</span>
+          <IndicatorBadges dialogue={dialogue} />
+          <div className="flex-1" />
+          <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings) }}
+            className={`rounded p-1 text-xs transition-colors ${hasSettings ? 'text-pink-500' : 'text-muted-foreground hover:text-pink-400'}`}>
             <Settings className="h-3 w-3" />
-            演出设置
+          </button>
+        </div>
+        <p className="text-sm text-foreground">{dialogue.content}</p>
+      </div>
+      <SettingsBlock show={showSettings}>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground">🎭 立绘</label>
+            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.spriteId || ''}
+              onChange={(e) => onUpdate?.({ ...dialogue, spriteId: e.target.value || undefined })}>
+              <option value="">默认</option>
+              {charSprites.map(s => <option key={s.id} value={s.id}>{s.name} ({s.type === 'base' ? '基础' : s.type === 'expression' ? '表情' : s.type === 'outfit' ? '服装' : '动作'})</option>)}
+            </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">🎭 立绘表情</label>
-              <input type="text" className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" placeholder="如: 微笑、惊讶、哭泣" value={dialogue.spriteExpression || ''} onChange={(e) => onUpdate?.({ ...dialogue, spriteExpression: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">⏱️ 文字速度</label>
-              <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" value={dialogue.textSpeed || 'normal'} onChange={(e) => onUpdate?.({ ...dialogue, textSpeed: e.target.value as 'slow' | 'normal' | 'fast' })}>
-                <option value="slow">慢速</option>
-                <option value="normal">正常</option>
-                <option value="fast">快速</option>
-              </select>
-            </div>
+          <div>
+            <label className="text-xs text-muted-foreground">📍 立绘位置</label>
+            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs"
+              value={dialogue.spritePosition || 'center'}
+              onChange={(e) => onUpdate?.({ ...dialogue, spritePosition: e.target.value as any || undefined })}>
+              <option value="left">左</option><option value="center">中</option><option value="right">右</option>
+            </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">🎵 BGM 变化</label>
-              <input type="text" className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" placeholder="BGM名称" value={dialogue.bgmChange || ''} onChange={(e) => onUpdate?.({ ...dialogue, bgmChange: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">🔊 音效</label>
-              <input type="text" className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" placeholder="如: 脚步声、开门声" value={dialogue.soundEffect || ''} onChange={(e) => onUpdate?.({ ...dialogue, soundEffect: e.target.value })} />
-            </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground flex items-center gap-1"><Mic className="h-3 w-3" />角色语音</label>
+            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.voiceId || ''}
+              onChange={(e) => onUpdate?.({ ...dialogue, voiceId: e.target.value || undefined })}>
+              <option value="">无</option>
+              {voiceOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">🖼️ CG 触发</label>
-              <input type="text" className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" placeholder="CG名称" value={dialogue.cgTrigger || ''} onChange={(e) => onUpdate?.({ ...dialogue, cgTrigger: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">⚡ 画面特效</label>
-              <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-pink-300 focus:outline-none" value={dialogue.screenEffect || 'none'} onChange={(e) => onUpdate?.({ ...dialogue, screenEffect: e.target.value as 'none' | 'shake' | 'flash_white' | 'flash_black' })}>
-                <option value="none">无</option>
-                <option value="shake">震动</option>
-                <option value="flash_white">闪白</option>
-                <option value="flash_black">闪黑</option>
-              </select>
+          <div>
+            <label className="text-xs text-muted-foreground">🎙️ 语音情绪</label>
+            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.voiceEmotion || '默认'}
+              onChange={(e) => onUpdate?.({ ...dialogue, voiceEmotion: e.target.value })}>
+              {voiceEmotions.map(ve => <option key={ve} value={ve}>{ve}</option>)}
+            </select>
+          </div>
+        </div>
+        <PerfSettings dialogue={dialogue} onUpdate={onUpdate} />
+      </SettingsBlock>
+      {dialoguePanelOpen && (
+        <DialogueEditPanel dialogue={dialogue} onUpdate={onUpdate} onDelete={onDelete} onClose={() => setDialoguePanelOpen(false)} />
+      )}
+    </>
+  )
+}
+
+// ── Delete Confirm ──
+function DeleteConfirmButton({ onDelete }: { onDelete: () => void }) {
+  const [show, setShow] = useState(false)
+  return (
+    <>
+      <button onClick={() => setShow(true)}
+        className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors">
+        <Trash2 className="h-4 w-4" />
+      </button>
+      {show && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setShow(false)}>
+          <div className="mx-4 w-full max-w-xs rounded-xl bg-white p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-foreground">确认删除</h3>
+            <p className="mt-1 text-xs text-muted-foreground">确定要删除这个选择吗？</p>
+            <div className="mt-3 flex gap-2">
+              <button onClick={() => setShow(false)} className="flex-1 rounded-lg border border-border py-1.5 text-xs">取消</button>
+              <button onClick={() => { onDelete(); setShow(false) }} className="flex-1 rounded-lg bg-red-500 py-1.5 text-xs text-white font-medium">删除</button>
             </div>
           </div>
         </div>
       )}
+    </>
+  )
+}
+
+// ── Narration Edit Panel ──
+function NarrationEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any; onUpdate?: any; onClose: () => void; onDelete?: () => void }) {
+  const [content, setContent] = useState(dialogue.content || '')
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-5 mx-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground">编辑旁白</h3>
+          <DeleteConfirmButton onDelete={() => { onDelete?.(); onClose() }} />
+        </div>
+        <textarea value={content} onChange={e => setContent(e.target.value)}
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none mb-4 h-32"
+          placeholder="输入旁白内容..." />
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
+          <button onClick={() => { if (!content.trim()) return; onUpdate?.({ ...dialogue, content }); onClose() }}
+            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50" disabled={!content.trim()}>保存</button>
+        </div>
+      </div>
     </div>
+  )
+}
+
+// ── Dialogue Edit Panel ──
+function DialogueEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any; onUpdate?: any; onClose: () => void; onDelete?: () => void }) {
+  const char = mockCharacters.find(c => c.id === dialogue.characterId)
+  const [charId, setCharId] = useState(dialogue.characterId || mockCharacters[0]?.id || '')
+  const [charName, setCharName] = useState(dialogue.characterName || char?.name || '')
+  const [content, setContent] = useState(dialogue.content || '')
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-5 mx-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground">编辑角色对话</h3>
+          <DeleteConfirmButton onDelete={() => { onDelete?.(); onClose() }} />
+        </div>
+        <label className="text-[10px] text-muted-foreground mb-1 block">角色</label>
+        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3"
+          value={charId} onChange={e => { setCharId(e.target.value); setCharName(mockCharacters.find(c => c.id === e.target.value)?.name || '') }}>
+          {mockCharacters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <label className="text-[10px] text-muted-foreground mb-1 block">对话内容</label>
+        <textarea value={content} onChange={e => setContent(e.target.value)}
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none mb-4 h-32"
+          placeholder="输入对话内容..." />
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
+          <button onClick={() => { if (!content.trim()) return; onUpdate?.({ ...dialogue, characterId: charId, characterName: charName, content }); onClose() }}
+            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50" disabled={!content.trim()}>保存</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Choice Panel (modal) ──
+function ChoicePanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any; onUpdate?: any; onClose: () => void; onDelete?: () => void }) {
+  const [prompt, setPrompt] = useState(dialogue.content || '')
+  const [choices, setChoices] = useState((dialogue.choices || []).map((c: any) => ({ text: c.text || '' })))
+
+  const save = () => {
+    onUpdate?.({ ...dialogue, content: prompt, choices })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-5 mx-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground">编辑选择</h3>
+          <DeleteConfirmButton onDelete={() => { onDelete?.(); onClose() }} />
+        </div>
+
+        {/* Prompt */}
+        <label className="text-[10px] text-muted-foreground mb-1 block">名称</label>
+        <input type="text" value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3"
+          placeholder="例如：接下来要做什么？" />
+
+        {/* Options */}
+        <label className="text-[10px] text-muted-foreground mb-1 block">选项 ({choices.length})</label>
+        <div className="space-y-1.5 mb-3 max-h-48 overflow-y-auto">
+          {choices.map((c, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground w-5">{i + 1}.</span>
+              <input type="text" value={c.text}
+                onChange={e => {
+                  const nc = [...choices]
+                  nc[i] = { text: e.target.value }
+                  setChoices(nc)
+                }}
+                className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+                placeholder={`选项 ${i + 1}`} />
+              <button onClick={() => setChoices(choices.filter((_, j) => j !== i))}
+                className="text-muted-foreground hover:text-red-400"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => setChoices([...choices, { text: '' }])}
+          className="w-full rounded-lg border border-dashed border-border py-2 text-xs text-muted-foreground hover:border-amber-300 hover:text-amber-600 transition-colors mb-4">
+          + 添加选项
+        </button>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
+          <button onClick={save} disabled={!prompt.trim()} className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50">保存</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Indicator badges ──
+function IndicatorBadges({ dialogue }: { dialogue: DialogueCardProps['dialogue'] }) {
+  return (
+    <div className="flex items-center gap-1">
+      {dialogue.backgroundChange && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-600">🖼️</span>}
+      {dialogue.bgmChange && <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-600">🎵</span>}
+      {dialogue.soundEffect && <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] text-green-600">🔊</span>}
+      {dialogue.cgTrigger && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-600">🎬</span>}
+      {dialogue.screenEffect && dialogue.screenEffect !== 'none' && <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-600">⚡</span>}
+      {dialogue.voiceId && <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] text-cyan-600">🎙️</span>}
+    </div>
+  )
+}
+
+// ── Performance settings ──
+function PerfSettings({ dialogue, onUpdate }: { dialogue: any; onUpdate?: any }) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-muted-foreground">🖼️ 背景</label>
+          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.backgroundChange || ''}
+            onChange={(e) => onUpdate?.({ ...dialogue, backgroundChange: e.target.value || undefined })}>
+            {bgOptions.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">🎵 BGM</label>
+          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.bgmChange || ''}
+            onChange={(e) => onUpdate?.({ ...dialogue, bgmChange: e.target.value || undefined })}>
+            {bgmOptions.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-muted-foreground">🔊 音效</label>
+          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.soundEffect || ''}
+            onChange={(e) => onUpdate?.({ ...dialogue, soundEffect: e.target.value || undefined })}>
+            <option value="">无</option>
+            {seOptions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">🎬 CG</label>
+          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.cgTrigger || ''}
+            onChange={(e) => onUpdate?.({ ...dialogue, cgTrigger: e.target.value || undefined })}>
+            <option value="">无</option>
+            {cgOptions.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-muted-foreground">⚡ 画面特效</label>
+          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.screenEffect || 'none'}
+            onChange={(e) => onUpdate?.({ ...dialogue, screenEffect: e.target.value as any })}>
+            <option value="none">无</option><option value="shake">震动</option><option value="flash_white">闪白</option><option value="flash_black">闪黑</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">✨ 转场</label>
+          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.transition || 'cut'}
+            onChange={(e) => onUpdate?.({ ...dialogue, transition: e.target.value as any })}>
+            <option value="cut">硬切</option><option value="fade">淡入淡出</option><option value="dissolve">溶解</option><option value="wipe">擦除</option>
+          </select>
+        </div>
+      </div>
+    </>
   )
 }

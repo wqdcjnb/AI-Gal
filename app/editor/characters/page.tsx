@@ -366,7 +366,6 @@ function SpriteSection({
   icon,
   color,
   sprites,
-  charId,
   onAdd,
   onDelete,
   onUpdate,

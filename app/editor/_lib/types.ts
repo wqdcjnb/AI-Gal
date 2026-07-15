@@ -13,8 +13,8 @@ export interface Chapter {
   summary: string
   scenes: string[]
   keyPoints: KeyPoint[]
-  route?: 'common' | 'a' | 'b' | 'c' | 'true'
-  endingType?: 'GE' | 'NE' | 'BE' | 'TE'
+  route?: string
+  endingType?: string  // "Good End" | "Normal End" | "Bad End" | "True End" 等
   branchFrom?: string
 }
 
@@ -30,24 +30,9 @@ export interface ProjectData {
   endings?: Ending[]
 }
 
-// Choice effect (好感度/Flag变化)
-export interface ChoiceEffect {
-  type: 'affection' | 'flag'
-  target: string // characterId or flag name
-  value: number | boolean
-  operator: 'set' | 'add' | 'subtract'
-}
-
-// Choice option with enhanced features
+// ── Choice option ──
 export interface ChoiceOption {
   text: string
-  targetSubSectionId: string
-  type?: 'normal' | 'hidden' | 'timed' // 选择肢类型（显示方式）
-  functionType?: 'branch' | 'affection' | 'flavor' | 'trap' // 功能属性（影响范围）
-  condition?: string // 显示条件 (e.g. "affection.c1 >= 50")
-  timeout?: number // 限时秒数
-  effects?: ChoiceEffect[] // 选择后的效果
-  isBadEnd?: boolean // 是否导向 Bad End
 }
 
 export interface DialogueLine {
@@ -55,39 +40,54 @@ export interface DialogueLine {
   type: 'narration' | 'dialogue' | 'choice'
   characterId?: string
   characterName?: string
+  characterColor?: string
+  spritePosition?: 'left' | 'center' | 'right'
   content: string
-  spriteId?: string // Which sprite to display during this dialogue
-  spriteExpression?: string // 立绘表情 (e.g. "微笑", "惊讶")
+  // 立绘
+  spriteId?: string
+  spriteExpression?: string
+  spriteOutfit?: string
+  spritePose?: string
   // 演出设置
-  bgmChange?: string // BGM变化
-  soundEffect?: string // 音效
-  cgTrigger?: string // CG触发
-  textSpeed?: 'slow' | 'normal' | 'fast' // 文字速度
-  screenEffect?: 'none' | 'shake' | 'flash_white' | 'flash_black' // 画面特效
+  backgroundChange?: string
+  bgmChange?: string
+  soundEffect?: string
+  cgTrigger?: string
+  screenEffect?: 'none' | 'shake' | 'flash_white' | 'flash_black'
+  transition?: 'cut' | 'fade' | 'dissolve' | 'wipe'
+  // 语音
+  voiceId?: string
+  voiceEmotion?: string
   // For choice type
   choices?: ChoiceOption[]
 }
 
-// Sub-section (小节) - each chapter has multiple sub-sections
+// ── Trigger (触发器) ──
+export interface TriggerCondition {
+  choiceDialogueId: string
+  optionIndex: number
+}
+
+export interface Trigger {
+  id: string
+  name: string
+  conditions: TriggerCondition[]
+  logic: 'and' | 'or'
+  jumpTarget: string
+}
+
+// Sub-section (小节)
 export interface SubSection {
   id: string
   title: string
   background: string
   bgm: string
+  cgTrigger?: string
+  transition?: 'cut' | 'fade' | 'dissolve' | 'wipe'
   dialogues: DialogueLine[]
-  isBranch?: boolean // Whether this sub-section is a branch point
-  branchFrom?: string // ID of the choice that leads to this sub-section
-  // 分支汇合
-  isMergePoint?: boolean // 是否为分支汇合点
-  mergeFromIds?: string[] // 从哪些小节汇合而来
-  // 结局/路线标记
-  endingType?: 'GE' | 'NE' | 'BE' | 'TE' // Good/Normal/Bad/True Ending
-  routeName?: string // 所属路线名称（如"樱线"、"雪菜线"）
-  // 场景控制
-  timeOfDay?: 'none' | 'dawn' | 'morning' | 'noon' | 'afternoon' | 'evening' | 'night' | 'midnight' // 时间
-  weather?: 'none' | 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'stormy' // 天气
-  transition?: 'cut' | 'fade' | 'dissolve' | 'wipe' // 转场
-  perspective?: 'first_person' | 'third_person' | 'overhead' | 'side_view' // 视角
+  triggers: Trigger[]
+  isBranch?: boolean
+  branchFrom?: string
 }
 
 // Ending (结局) - for multi-ending mode
@@ -169,13 +169,14 @@ export interface ChapterCardProps extends ChapterEditProps {
   isMultiEnding?: boolean
   isBranching?: boolean
   displayNumber?: number
+  cardColors?: { border: string; shadow: string; numberBg: string; numberText: string; dot: string; hoverBg: string; buttonText: string; focusRing: string }
 }
 
 export interface OutlineTabProps {
   project: ProjectData
   isGenerating: boolean
   onGenerate: (description?: string) => void
-  onAddChapter: (route?: 'common' | 'a' | 'b' | 'c' | 'true') => void
+  onAddChapter: (route?: string) => void
   onDeleteChapter: (id: string) => void
   onEditChapter: (chapter: Chapter) => void
   onAddKeyPoint: (chapterId: string, keyPointData?: KeyPoint) => void
@@ -205,7 +206,7 @@ export interface TreeViewProps extends ChapterViewProps {
   isBranching: boolean
   isMultiEnding?: boolean
   onAddRoute?: (route: string, chapterCount?: number) => void
-  onAddChapter?: (route?: 'common' | 'a' | 'b' | 'c' | 'true') => void
+  onAddChapter?: (route?: string) => void
   onOpenAddRouteDialog?: () => void
   onEditRoute?: (route: string) => void
 }
@@ -233,9 +234,11 @@ export interface AddRouteDialogProps {
   isOpen: boolean
   onClose: () => void
   onSave: (routeName: string, description: string, chapterCount: number) => void
+  onDelete?: () => void
   onAIGenerate?: () => Promise<{ name?: string; description?: string }>
   isGenerating?: boolean
-  initialData?: { routeName?: string; description?: string; chapterCount?: number }
+  initialData?: { routeName?: string; endingType?: string; description?: string; chapterCount?: number }
+  isEndingMode?: boolean
 }
 
 export interface ChapterTabProps {
@@ -248,10 +251,17 @@ export interface SubSectionCardProps {
   isExpanded: boolean
   onToggle: () => void
   onUpdate?: (subSection: SubSection) => void
+  allSubSections?: { id: string; title: string }[]
+  subSectionTree?: { value: string; label: string; children?: { value: string; label: string }[] }[]
 }
 
 export interface DialogueCardProps {
   dialogue: DialogueLine
   index: number
   onUpdate?: (dialogue: DialogueLine) => void
+  onDelete?: () => void
+  subSectionIds?: { id: string; title: string }[]
+  onDragStart?: (e: React.DragEvent, index: number) => void
+  onDragOver?: (e: React.DragEvent) => void
+  onDrop?: (e: React.DragEvent, index: number) => void
 }

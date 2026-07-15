@@ -16,12 +16,12 @@ interface ProjectContextType {
 
   // Chapter CRUD
   updateChapter: (chapterId: string, updates: Partial<Chapter>) => void
-  addChapter: (route?: 'common' | 'a' | 'b' | 'c' | 'true') => void
+  addChapter: (route?: string) => void
   requestDeleteChapter: (chapterId: string) => void
   confirmDeleteChapter: () => void
   cancelDelete: () => void
   deleteConfirmId: string | null
-  addRoute: (route: string, chapterCount?: number) => void
+  addRoute: (route: string, chapterCount?: number, endingType?: string) => void
 
   // Key Point
   addKeyPoint: (chapterId: string, keyPointData?: KeyPoint) => void
@@ -282,7 +282,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }
 
   // Add chapter
-  const addChapter = (route?: 'common' | 'a' | 'b' | 'c' | 'true') => {
+  const addChapter = (route?: string) => {
     if (!project) return
     const chapterRoute = route || 'common'
 
@@ -456,23 +456,23 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }
 
   // Add route
-  const addRoute = (route: string, chapterCount: number = 1) => {
+  const addRoute = (routeName: string, chapterCount: number = 1, endingType?: string) => {
     if (!project) return
-    const routeLabel = route.toLowerCase() as 'a' | 'b' | 'c' | 'true'
     const commonChapterCount = project.chapters.filter(ch => ch.route === 'common').length
-    const routeChapters = project.chapters.filter(ch => ch.route === routeLabel)
 
     const newChapters: Chapter[] = []
     for (let i = 0; i < chapterCount; i++) {
-      const chapterNumber = commonChapterCount + routeChapters.length + i + 1
+      const chapterNumber = commonChapterCount + i + 1
+      const isEnding = !!endingType
       newChapters.push({
-        id: crypto.randomUUID(),
+        id: `ch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         number: chapterNumber,
-        title: `${route}线 第${toChineseNumberInternal(chapterNumber)}章`,
+        title: isEnding ? routeName : `${routeName} 第${toChineseNumberInternal(chapterNumber)}章`,
         summary: '在此输入章节摘要...',
         scenes: ['新场景'],
         keyPoints: [],
-        route: routeLabel,
+        route: routeName,
+        endingType: endingType || undefined,
       })
     }
 
