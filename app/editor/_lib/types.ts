@@ -217,6 +217,7 @@ export interface KeyPointModalProps {
   keyPoint: KeyPoint | null
   chapterTitle: string
   onSave: (keyPoint: KeyPoint) => void
+  onDelete?: (keyPointId: string) => void
   onAIGenerate?: (keyPointId: string) => void
   isGenerating?: boolean
 }

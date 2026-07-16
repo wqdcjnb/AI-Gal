@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Sparkles, Loader2 } from 'lucide-react'
+import { Sparkles, Loader2, X } from 'lucide-react'
 import { useProject } from '@/app/editor/_components/project-provider'
 import { toChineseNumber } from '@/app/editor/_lib/utils'
 import type { KeyPoint } from '@/app/editor/_lib/types'
@@ -46,6 +46,9 @@ export default function OutlinePage() {
   const [addRouteDialogOpen, setAddRouteDialogOpen] = useState(false)
   const [editRouteDialogOpen, setEditRouteDialogOpen] = useState(false)
   const [editingRoute, setEditingRoute] = useState<string | null>(null)
+  // Undo state for route and keypoint deletion
+  const [undoData, setUndoData] = useState<{ chapters?: Chapter[]; keyPoint?: { chapterId: string; keyPoint: KeyPoint } } | null>(null)
+  const [showUndo, setShowUndo] = useState(false)
 
   if (!project) return null
 
@@ -169,6 +172,15 @@ export default function OutlinePage() {
         keyPoint={selectedKeyPoint?.keyPoint || null}
         chapterTitle={selectedKeyPoint ? `第${toChineseNumber(project.chapters.find(ch => ch.id === selectedKeyPoint.chapterId)?.number || 1)}章` : ''}
         onSave={handleKeyPointSave}
+        onDelete={(keyPointId) => {
+          if (selectedKeyPoint) {
+            const kp = selectedKeyPoint.keyPoint
+            deleteKeyPoint(selectedKeyPoint.chapterId, keyPointId)
+            setUndoData({ keyPoint: { chapterId: selectedKeyPoint.chapterId, keyPoint: kp } })
+            setShowUndo(true)
+            setTimeout(() => { setShowUndo(false); setTimeout(() => setUndoData(null), 500) }, 5000)
+          }
+        }}
         onAIGenerate={handleAIGenerateKeyPoint}
         isGenerating={isGeneratingKeyPoint}
       />
@@ -264,8 +276,12 @@ export default function OutlinePage() {
         }}
         onDelete={() => {
           if (editingRoute) {
+            const deletedChapters = project.chapters.filter(ch => ch.route === editingRoute)
             const updatedChapters = project.chapters.filter(ch => ch.route !== editingRoute)
             saveProject({ ...project, chapters: updatedChapters })
+            setUndoData({ chapters: deletedChapters })
+            setShowUndo(true)
+            setTimeout(() => { setShowUndo(false); setTimeout(() => setUndoData(null), 500) }, 5000)
           }
         }}
         initialData={(() => {
@@ -307,6 +323,28 @@ export default function OutlinePage() {
           return { description }
         }}
       />
+
+      {/* Undo Toast */}
+      {undoData && (
+        <div className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 transition-all duration-500 ${showUndo ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+          onTransitionEnd={() => { if (!showUndo) setUndoData(null) }}>
+          <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 text-white shadow-lg">
+            <span className="text-sm">
+              {undoData.chapters ? `已删除路线「${undoData.chapters[0]?.route || editingRoute}」` : undoData.keyPoint ? `已删除小节「${undoData.keyPoint.keyPoint.text}」` : ''}
+            </span>
+            <button onClick={() => {
+              if (undoData.chapters) {
+                saveProject({ ...project, chapters: [...project.chapters, ...undoData.chapters] })
+              } else if (undoData.keyPoint) {
+                addKeyPoint(undoData.keyPoint.chapterId, undoData.keyPoint.keyPoint)
+              }
+              setShowUndo(false)
+              setUndoData(null)
+            }} className="rounded bg-white/20 px-3 py-1 text-sm font-medium hover:bg-white/30">撤销</button>
+            <button onClick={() => { setShowUndo(false) }} className="text-white/60 hover:text-white"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

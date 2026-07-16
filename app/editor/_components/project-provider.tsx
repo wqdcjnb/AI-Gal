@@ -237,10 +237,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       clearTimeout(undoTimeoutRef.current)
     }
 
-    // Auto-hide undo toast after 5 seconds
+    // Auto-hide undo toast after 5 seconds (fade then clear)
     undoTimeoutRef.current = setTimeout(() => {
       setShowUndoToast(false)
-      setDeletedChapter(null)
+      setTimeout(() => setDeletedChapter(null), 400)
     }, 5000)
   }
 
@@ -274,11 +274,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   // Dismiss undo toast
   const dismissUndoToast = () => {
-    if (undoTimeoutRef.current) {
-      clearTimeout(undoTimeoutRef.current)
-    }
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current)
     setShowUndoToast(false)
-    setDeletedChapter(null)
+    setTimeout(() => setDeletedChapter(null), 400)
   }
 
   // Add chapter
@@ -360,12 +358,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       clearTimeout(endingUndoTimeoutRef.current)
     }
 
-    // Auto-hide undo toast after 5 seconds with fade out
     endingUndoTimeoutRef.current = setTimeout(() => {
       setShowEndingUndoToast(false)
-      setTimeout(() => {
-        setDeletedEnding(null)
-      }, 500) // Wait for fade out animation
+      setTimeout(() => setDeletedEnding(null), 400)
     }, 5000)
   }
 
@@ -395,11 +390,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   // Dismiss ending undo toast
   const dismissEndingUndoToast = () => {
-    if (endingUndoTimeoutRef.current) {
-      clearTimeout(endingUndoTimeoutRef.current)
-    }
+    if (endingUndoTimeoutRef.current) clearTimeout(endingUndoTimeoutRef.current)
     setShowEndingUndoToast(false)
-    setDeletedEnding(null)
+    setTimeout(() => setDeletedEnding(null), 400)
   }
 
   // Update ending

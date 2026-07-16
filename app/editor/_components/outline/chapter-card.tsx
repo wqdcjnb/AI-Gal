@@ -178,12 +178,6 @@ export function ChapterCard({
                         </span>
                       )}
                     </button>
-                    <button
-                      onClick={() => onDeleteKeyPoint(chapter.id, kp.id)}
-                      className="opacity-0 group-hover/kp:opacity-100 text-red-400 hover:text-red-600 transition-opacity mt-0.5"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
                   </div>
                 ))}
                 <button
