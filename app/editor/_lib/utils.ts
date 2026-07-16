@@ -121,14 +121,13 @@ export const generateMockOutline = (projectName: string, narrativeStructure: str
     }
 
     // Append ending chapters AFTER the main chapters (not counted in chapterCount)
-    const endingChapterTemplates: Array<{ title: string; scenes: string[]; keyPoints: string[]; endingType: 'GE' | 'NE' | 'BE' | 'TE' }> = [
-      { title: '美好结局', scenes: ['樱花树下'], keyPoints: ['最终抉择', '幸福结局'], endingType: 'GE' },
-      { title: '平凡结局', scenes: ['教室'], keyPoints: ['回归日常', '留下回忆'], endingType: 'NE' },
-      { title: '悲伤结局', scenes: ['雨中'], keyPoints: ['无法挽回', '命运弄人'], endingType: 'BE' },
-      { title: '真结局', scenes: ['星夜'], keyPoints: ['揭开真相', '真正的结局'], endingType: 'TE' },
+    const endingChapterTemplates: Array<{ title: string; scenes: string[]; keyPoints: string[]; endingType: string }> = [
+      { title: 'Good End', scenes: ['樱花树下'], keyPoints: ['最终抉择', '幸福结局'], endingType: 'Good End' },
+      { title: 'Normal End', scenes: ['教室'], keyPoints: ['回归日常', '留下回忆'], endingType: 'Normal End' },
+      { title: 'Bad End', scenes: ['雨中'], keyPoints: ['无法挽回', '命运弄人'], endingType: 'Bad End' },
+      { title: 'True End', scenes: ['星夜'], keyPoints: ['揭开真相', '真正的结局'], endingType: 'True End' },
     ]
 
-    const endingRoutes = ['Good End', 'Normal End', 'Bad End', 'True End']
     for (let e = 0; e < endingChapterTemplates.length; e++) {
       const tpl = endingChapterTemplates[e]
       const chapterNum = count + 1
@@ -139,8 +138,8 @@ export const generateMockOutline = (projectName: string, narrativeStructure: str
         summary: tpl.keyPoints.join('，') + '…',
         scenes: tpl.scenes,
         keyPoints: tpl.keyPoints.map((text, idx) => ({ id: `kp-end-${e}-${idx}`, text })),
-        route: endingRoutes[e],
-        endingType: endingRoutes[e],
+        route: tpl.endingType,
+        endingType: tpl.endingType,
       })
     }
   } else if (isBranching) {

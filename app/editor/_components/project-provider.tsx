@@ -459,11 +459,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const addRoute = (routeName: string, chapterCount: number = 1, endingType?: string) => {
     if (!project) return
     const commonChapterCount = project.chapters.filter(ch => ch.route === 'common').length
+    const isEnding = !!endingType
 
     const newChapters: Chapter[] = []
     for (let i = 0; i < chapterCount; i++) {
       const chapterNumber = commonChapterCount + i + 1
-      const isEnding = !!endingType
       newChapters.push({
         id: `ch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         number: chapterNumber,

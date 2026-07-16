@@ -282,11 +282,10 @@ export default function OutlinePage() {
         onSave={(routeName: string, endingType?: string) => {
           if (isMultiEnding && (routeName !== editingRoute || endingType)) {
             const updatedChapters = project.chapters.map(ch =>
-              ch.route === editingRoute ? { ...ch, route: routeName, endingType: endingType || ch.endingType } : ch
+              ch.route === editingRoute ? { ...ch, route: routeName, endingType: endingType || ch.endingType, title: routeName } : ch
             )
             saveProject({ ...project, chapters: updatedChapters })
           } else if (!isMultiEnding && routeName !== editingRoute) {
-            // Branching: rename route
             const updatedChapters = project.chapters.map(ch =>
               ch.route === editingRoute ? { ...ch, route: routeName } : ch
             )

@@ -5,6 +5,7 @@
 import { registerUser } from "@/lib/auth/register";
 import { validatePasswordStrength } from "@/lib/auth/validate";
 import { db } from "@/lib/cloudbase";
+import { createUser } from "@/lib/user-store";
 import { COLLECTIONS } from "@/lib/db-schema";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
