@@ -15,8 +15,12 @@ const app = cloudbase.init({
     : { secretId: process.env.TENCENTCLOUD_SECRETID, secretKey: process.env.TENCENTCLOUD_SECRETKEY },
 } as any);
 
-// 导出数据库实例（NoSQL 文档数据库）
+// NoSQL 文档数据库（旧，仅 auth/register 残留使用）
 export const db = app.database();
+
+// PostgreSQL 关系型数据库（项目数据存储）
+// rdb() 参数说明：不传 database 时会把 envId 作为 schema 名，会报 PGRST106
+export const rdb = (app as any).rdb({ database: "public" });
 
 // 导出 CloudBase 应用实例
 export default app;

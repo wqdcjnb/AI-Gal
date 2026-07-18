@@ -27,14 +27,16 @@ export async function GET() {
     const parsed = token ? parseAccessToken(token) : null
     const email = parsed?.email || uid
 
-    let user = getUser(uid)
-    if (!user) user = createUser(uid, email)
+    let user = await getUser(uid)
+    if (!user) user = await createUser(uid, email)
+
+    const avatarUrl = user.avatar_url || ""
 
     return NextResponse.json({
       success: true,
       data: {
         nickname: user.nickname,
-        avatarUrl: user.avatar_url,
+        avatarUrl,
         email: user.email,
       },
     })
@@ -54,14 +56,14 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: false, message: "昵称需 1-30 字符" }, { status: 400 })
     }
 
-    let user = getUser(uid)
+    let user = await getUser(uid)
     if (!user) {
       const cookieStore = await cookies()
       const parsed = parseAccessToken(cookieStore.get(COOKIE_NAME)?.value || "")
-      user = createUser(uid, parsed?.email || uid)
+      user = await createUser(uid, parsed?.email || uid)
     }
 
-    const updated = updateUser(uid, { nickname: nickname.trim() })
+    const updated = await updateUser(uid, { nickname: nickname.trim() })
     return NextResponse.json({ success: true, data: { nickname: updated?.nickname } })
   } catch (e: any) {
     return NextResponse.json({ success: false, message: e?.message || "更新失败" }, { status: 500 })

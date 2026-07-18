@@ -204,3 +204,26 @@ export const generateMockOutline = (projectName: string, narrativeStructure: str
 
   return chapters
 }
+
+/**
+ * 生成章节骨架（空内容，进编辑器时直接显示结构）
+ * - 只生成主线/共通线章节，结局和个人线由用户自己添加
+ */
+export const generateChapterSkeleton = (narrativeStructure: string, chapterCount: number): Chapter[] => {
+  const chapters: Chapter[] = []
+  const now = Date.now()
+
+  for (let i = 0; i < chapterCount; i++) {
+    chapters.push({
+      id: `ch-${now}-${i}`,
+      number: i + 1,
+      title: `第${i + 1}章`,
+      summary: '',
+      scenes: [],
+      keyPoints: [],
+      route: 'common',
+    })
+  }
+
+  return chapters
+}

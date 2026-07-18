@@ -21,7 +21,7 @@ export function TimelineView(props: ChapterViewProps) {
 
             {/* Chapter card */}
             <div className="ml-14">
-              <ChapterCard {...props} chapter={chapter} index={idx} />
+              <ChapterCard {...props} chapter={chapter} index={idx} displayNumber={idx + 1} />
             </div>
           </div>
         ))}

@@ -116,6 +116,9 @@ export interface Character {
   avatar?: string
   personality?: string
   description?: string
+  appearance?: string[]
+  temperament?: string[]
+  extraDescription?: string
   sprites: Sprite[] // All sprite variations for this character
 }
 
@@ -265,4 +268,15 @@ export interface DialogueCardProps {
   onDragStart?: (e: React.DragEvent, index: number) => void
   onDragOver?: (e: React.DragEvent) => void
   onDrop?: (e: React.DragEvent, index: number) => void
+}
+
+// Saved sprite combination (gallery item)
+export interface SavedCombo {
+  id: string
+  spriteId: string
+  expressionId?: string
+  outfitId?: string
+  poseId?: string
+  name: string
+  url?: string
 }

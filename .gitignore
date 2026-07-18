@@ -45,3 +45,6 @@ docs
 node_modules
 .data
 .agents
+
+# db migration & admin scripts (local only)
+.db-scripts/

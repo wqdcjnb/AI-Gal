@@ -1,31 +1,18 @@
 /**
- * 本地 SQLite 用户存储（Node 22+ 内置 sqlite）
- * 替代 CloudBase NoSQL，零配置，零费用
+ * 用户扩展信息存储（CloudBase PostgreSQL）
+ *
+ * 表: public.profiles
+ * 关联: profiles.uid → auth.users.uid（CloudBase 内置认证）
+ *
+ * 所有函数均为 async
  */
-import { DatabaseSync } from 'node:sqlite'
-import path from 'path'
+import { rdb } from "./cloudbase"
 
-const dbPath = path.join(process.cwd(), '.data', 'app.db')
+// ============================================================
+// 类型
+// ============================================================
 
-// 确保目录存在
-import { mkdirSync } from 'node:fs'
-mkdirSync(path.dirname(dbPath), { recursive: true })
-
-const db = new DatabaseSync(dbPath)
-
-// 初始化表
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    uid TEXT PRIMARY KEY,
-    email TEXT NOT NULL,
-    nickname TEXT NOT NULL,
-    avatar_url TEXT DEFAULT '',
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  )
-`)
-
-interface UserRow {
+export interface UserRow {
   uid: string
   email: string
   nickname: string
@@ -34,30 +21,56 @@ interface UserRow {
   updated_at: number
 }
 
-export function getUser(uid: string): UserRow | null {
-  const stmt = db.prepare('SELECT * FROM users WHERE uid = ?')
-  const row = stmt.get(uid) as UserRow | undefined
-  return row || null
+// ============================================================
+// CRUD
+// ============================================================
+
+/** 获取用户扩展信息 */
+export async function getUser(uid: string): Promise<UserRow | null> {
+  const { data, error } = await rdb
+    .from("profiles")
+    .select("*")
+    .eq("uid", uid)
+
+  if (error || !data?.length) return null
+  return data[0] as UserRow
 }
 
-export function createUser(uid: string, email: string): UserRow {
-  const existing = getUser(uid)
+/** 创建用户扩展信息（注册时调用） */
+export async function createUser(uid: string, email: string): Promise<UserRow> {
+  // 先查是否存在（upsert 也能处理，但保留兼容性）
+  const existing = await getUser(uid)
   if (existing) return existing
+
   const now = Date.now()
-  const nickname = email.split('@')[0] || email
-  db.prepare('INSERT INTO users (uid, email, nickname, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-    .run(uid, email, nickname, now, now)
-  return { uid, email, nickname, avatar_url: '', created_at: now, updated_at: now }
+  const nickname = email.split("@")[0] || email
+
+  const { error } = await rdb.from("profiles").insert({
+    uid,
+    email,
+    nickname,
+    avatar_url: "",
+    created_at: now,
+    updated_at: now,
+  })
+
+  if (error) throw new Error(`创建用户失败: ${error.message || error}`)
+
+  return { uid, email, nickname, avatar_url: "", created_at: now, updated_at: now }
 }
 
-export function updateUser(uid: string, data: Partial<Pick<UserRow, 'nickname' | 'avatar_url'>>) {
-  const sets: string[] = []
-  const vals: any[] = []
-  if (data.nickname !== undefined) { sets.push('nickname = ?'); vals.push(data.nickname) }
-  if (data.avatar_url !== undefined) { sets.push('avatar_url = ?'); vals.push(data.avatar_url) }
-  if (sets.length === 0) return getUser(uid)
-  sets.push('updated_at = ?'); vals.push(Date.now())
-  vals.push(uid)
-  db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE uid = ?`).run(...vals)
+/** 更新用户扩展信息（昵称、头像） */
+export async function updateUser(
+  uid: string,
+  data: Partial<Pick<UserRow, "nickname" | "avatar_url">>
+): Promise<UserRow | null> {
+  const fields: Record<string, any> = { updated_at: Date.now() }
+  if (data.nickname !== undefined) fields.nickname = data.nickname
+  if (data.avatar_url !== undefined) fields.avatar_url = data.avatar_url
+
+  const { error } = await rdb.from("profiles").update(fields).eq("uid", uid)
+
+  if (error) throw new Error(`更新用户失败: ${error.message || error}`)
+
   return getUser(uid)
 }

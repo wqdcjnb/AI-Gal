@@ -65,33 +65,132 @@ const STYLE_ICONS: Record<string, string> = {
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<GameProject[]>(mockProjects);
+  const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GameProject | null>(null);
   const [settingsTarget, setSettingsTarget] = useState<GameProject | null>(null);
 
-  const handleCreateProject = (data: { name: string; style: string; setting: string; structure: string; chapterCount: number; synopsis: string }) => {
-    const newProject: GameProject = {
-      id: `${Date.now()}`,
-      name: data.name,
-      style: data.style,
-      setting: data.setting,
-      structure: data.structure,
-      synopsis: data.synopsis,
-      cover_url: null,
-      chapter_count: data.chapterCount,
-      status: 'editing',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      chapterCount: data.chapterCount,
-      sceneCount: 0,
-      characterCount: 0,
+  // 加载项目：先显示缓存，后台从 API 刷新
+  useEffect(() => {
+    // 1. 先显示缓存的项目（即时渲染）
+    const cached: GameProject[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith("project-")) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key)!)
+          if (data.id && data.name) {
+            cached.push({
+              id: data.id,
+              name: data.name,
+              style: data.emotionStyle || "恋爱喜剧",
+              setting: data.themeBackground || "校园",
+              structure: data.narrativeStructure || "分支叙事",
+              synopsis: data.synopsis || "",
+              cover_url: null,
+              chapter_count: data.chapterCount || 6,
+              status: "editing",
+              created_at: "",
+              updated_at: "",
+              chapterCount: data.chapterCount || 6,
+              sceneCount: 0,
+              characterCount: 0,
+            })
+          }
+        } catch {}
+      }
     }
-    setProjects([newProject, ...projects])
-    localStorage.setItem(`project-${newProject.id}`, JSON.stringify({
-      id: newProject.id, name: newProject.name, emotionStyle: newProject.style,
-      themeBackground: newProject.setting, narrativeStructure: newProject.structure,
-      synopsis: newProject.synopsis, chapterCount: newProject.chapter_count, chapters: [],
-    }))
+    if (cached.length > 0) {
+      const cachedIds = new Set(cached.map(p => p.id))
+      const filteredMock = mockProjects.filter(p => !cachedIds.has(p.id))
+      setProjects([...cached, ...filteredMock])
+      setLoading(false)
+    }
+
+    // 2. 后台从 API 刷新最新数据
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success && json.data?.length > 0) {
+          const apiProjects: GameProject[] = json.data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            style: p.emotion_style,
+            setting: p.theme_background,
+            structure: p.narrative_structure,
+            synopsis: p.synopsis || "",
+            cover_url: p.cover_url,
+            chapter_count: p.chapter_count,
+            status: p.status,
+            created_at: new Date(p.created_at).toISOString(),
+            updated_at: new Date(p.updated_at).toISOString(),
+            chapterCount: p.chapter_count,
+            sceneCount: 0,
+            characterCount: 0,
+          }))
+          // 同步到 localStorage
+          for (const p of apiProjects) {
+            const existing = localStorage.getItem(`project-${p.id}`)
+            const editorData = existing ? JSON.parse(existing) : { chapters: [] }
+            editorData.id = p.id
+            editorData.name = p.name
+            editorData.emotionStyle = p.style
+            editorData.themeBackground = p.setting
+            editorData.narrativeStructure = p.structure
+            editorData.synopsis = p.synopsis
+            editorData.chapterCount = p.chapter_count
+            editorData.endings = editorData.endings || []
+            localStorage.setItem(`project-${p.id}`, JSON.stringify(editorData))
+          }
+          const apiIds = new Set(apiProjects.map(p => p.id))
+          const filteredMock = mockProjects.filter(p => !apiIds.has(p.id))
+          setProjects([...apiProjects, ...filteredMock])
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleCreateProject = async (data: { name: string; style: string; setting: string; structure: string; chapterCount: number; synopsis: string; coverUrl: string; coverDisplayUrl: string }) => {
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: data.name,
+        emotion_style: data.style,
+        theme_background: data.setting,
+        narrative_structure: data.structure,
+        synopsis: data.synopsis,
+        chapter_count: data.chapterCount,
+        cover_url: data.coverUrl || null,
+      }),
+    })
+    const json = await res.json()
+    if (json.success) {
+      const newProject: GameProject = {
+        id: json.data.id,
+        name: data.name,
+        style: data.style,
+        setting: data.setting,
+        structure: data.structure,
+        synopsis: data.synopsis,
+        cover_url: data.coverDisplayUrl || data.coverUrl || null,
+        chapter_count: data.chapterCount,
+        status: 'editing',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        chapterCount: data.chapterCount,
+        sceneCount: 0,
+        characterCount: 0,
+      }
+      setProjects([newProject, ...projects])
+      // 兼容编辑器：编辑器目前仍从 localStorage 读取
+      localStorage.setItem(`project-${json.data.id}`, JSON.stringify({
+        id: json.data.id, name: data.name, emotionStyle: data.style,
+        themeBackground: data.setting, narrativeStructure: data.structure,
+        synopsis: data.synopsis, chapterCount: data.chapterCount, chapters: [],
+      }))
+    }
   }
 
   return (
@@ -162,8 +261,12 @@ export default function DashboardPage() {
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => {
+                onClick={async () => {
                   if (deleteTarget) {
+                    await fetch(`/api/projects?id=${deleteTarget.id}`, { method: "DELETE" })
+                    localStorage.removeItem(`project-${deleteTarget.id}`)
+                    localStorage.removeItem(`ai-gal-characters-${deleteTarget.id}`)
+                    localStorage.removeItem(`ai-gal-combos-${deleteTarget.id}`)
                     setProjects(projects.filter(p => p.id !== deleteTarget.id));
                   }
                   setDeleteTarget(null);
@@ -180,20 +283,34 @@ export default function DashboardPage() {
         <SettingsDialog
           project={settingsTarget}
           onClose={() => setSettingsTarget(null)}
-          onSave={(id, data) => {
+          onSave={async (id, data) => {
+            const coverUrl = data.coverUrl || (projects.find(p => p.id === id)?.cover_url ?? "")
+            const displayUrl = data.coverDisplayUrl || coverUrl
+            await fetch("/api/projects", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                id,
+                name: data.name,
+                emotion_style: data.style,
+                theme_background: data.setting,
+                synopsis: data.synopsis,
+                cover_url: coverUrl || null,
+              }),
+            })
+            // 同步到 localStorage（编辑器从 localStorage 读取）
+            const saved = localStorage.getItem(`project-${id}`)
+            if (saved) {
+              const editorData = JSON.parse(saved)
+              editorData.name = data.name
+              editorData.emotionStyle = data.style
+              editorData.themeBackground = data.setting
+              editorData.synopsis = data.synopsis
+              localStorage.setItem(`project-${id}`, JSON.stringify(editorData))
+            }
             setProjects(projects.map(p => {
               if (p.id === id) {
-                const updated = { ...p, name: data.name, style: data.style, setting: data.setting, synopsis: data.synopsis, updated_at: new Date().toISOString() }
-                // Always save to localStorage so editor picks up changes
-                const saved = localStorage.getItem(`project-${id}`)
-                const proj = projects.find(pp => pp.id === id)
-                const editorData = saved ? JSON.parse(saved) : { id, name: data.name, emotionStyle: data.style, themeBackground: data.setting, narrativeStructure: proj?.structure || '分支叙事', synopsis: data.synopsis, chapters: [] }
-                editorData.name = data.name
-                editorData.emotionStyle = data.style
-                editorData.themeBackground = data.setting
-                editorData.synopsis = data.synopsis
-                localStorage.setItem(`project-${id}`, JSON.stringify(editorData))
-                return updated
+                return { ...p, name: data.name, style: data.style, setting: data.setting, synopsis: data.synopsis, cover_url: displayUrl, updated_at: new Date().toISOString() }
               }
               return p
             }))
@@ -218,12 +335,13 @@ function ProjectCard({
   onSettings: () => void;
 }) {
   const router = useRouter();
-  const styleInfo = STYLE_LABELS[project.style];
+  const firstStyle = project.style.split(",")[0]?.trim() || project.style
+  const styleInfo = STYLE_LABELS[firstStyle];
   const settingInfo = SETTING_LABELS[project.setting];
   const structureInfo = STRUCTURE_LABELS[project.structure];
   const statusInfo = STATUS_CONFIG[project.status];
   const gradient = COVER_GRADIENTS[gradientIndex];
-  const icon = STYLE_ICONS[project.style] || '🎮';
+  const icon = STYLE_ICONS[firstStyle] || '🎮';
 
   const updatedDate = new Date(project.updated_at);
   const [timeAgo, setTimeAgo] = useState('');
@@ -238,12 +356,16 @@ function ProjectCard({
     >
       {/* Cover Image Area */}
       <div className={`relative aspect-[16/10] bg-gradient-to-br ${gradient} overflow-hidden`}>
-        {/* Decorative elements */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-6xl opacity-40 group-hover:opacity-60 transition-opacity duration-300 group-hover:scale-110 transform">
-            {icon}
-          </span>
-        </div>
+        {/* Actual cover image */}
+        {project.cover_url ? (
+          <img src={project.cover_url} alt={project.name} className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-6xl opacity-40 group-hover:opacity-60 transition-opacity duration-300 group-hover:scale-110 transform">
+              {icon}
+            </span>
+          </div>
+        )}
         {/* Overlay gradient */}
         <div className="absolute inset-0 bg-gradient-to-t from-white/40 via-transparent to-transparent" />
         {/* Status badge */}
@@ -294,16 +416,21 @@ function ProjectCard({
 
         {/* Tags */}
         <div className="flex flex-wrap gap-1.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium border ${styleInfo?.color || 'bg-stone-100 text-stone-600 border-stone-200'}`}>
-                {project.style}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="bg-white border-pink-100/60 text-xs shadow-md text-stone-700">
-              {styleInfo?.desc}
-            </TooltipContent>
-          </Tooltip>
+          {project.style.split(",").filter(Boolean).map((s) => {
+            const info = STYLE_LABELS[s.trim()]
+            return (
+              <Tooltip key={s}>
+                <TooltipTrigger asChild>
+                  <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium border ${info?.color || 'bg-stone-100 text-stone-600 border-stone-200'}`}>
+                    {s.trim()}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="bg-white border-pink-100/60 text-xs shadow-md text-stone-700">
+                  {info?.desc}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
           <Tooltip>
             <TooltipTrigger asChild>
               <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium border ${settingInfo?.color || 'bg-stone-100 text-stone-600 border-stone-200'}`}>
@@ -401,14 +528,15 @@ function CreateProjectDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (data: { name: string; style: string; setting: string; structure: string; chapterCount: number; synopsis: string }) => void;
+  onCreate: (data: { name: string; style: string; setting: string; structure: string; chapterCount: number; synopsis: string; coverUrl: string; coverDisplayUrl: string }) => void;
 }) {
   const [gameName, setGameName] = useState('');
-  const [selectedStyle, setSelectedStyle] = useState<string>('');
+  const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedSetting, setSelectedSetting] = useState<string>('');
   const [selectedStructure, setSelectedStructure] = useState<string>('');
   const [chapterCount, setChapterCount] = useState(6);
   const [synopsis, setSynopsis] = useState('');
+  const [coverDataUrl, setCoverDataUrl] = useState<string>("");
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -446,18 +574,20 @@ function CreateProjectDialog({
               <span className="text-xs text-stone-400 ml-2 font-normal">决定故事的情绪基调</span>
             </Label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {Object.entries(STYLE_LABELS).map(([key, info]) => (
+              {Object.entries(STYLE_LABELS).map(([key, info]) => {
+                  const isSelected = selectedStyles.includes(key)
+                  return (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setSelectedStyle(key)}
+                  onClick={() => setSelectedStyles(prev => isSelected ? prev.filter(s => s !== key) : [...prev, key])}
                   className={`relative flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-all duration-200 ${
-                    selectedStyle === key
+                    isSelected
                       ? 'border-pink-400 bg-pink-50/80 shadow-sm shadow-pink-100'
                       : 'border-stone-200 bg-white hover:border-pink-200 hover:bg-pink-50/30'
                   }`}
                 >
-                  {selectedStyle === key && (
+                  {isSelected && (
                     <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-pink-400 text-white">
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -465,12 +595,12 @@ function CreateProjectDialog({
                     </span>
                   )}
                   <span className="text-xl">{info.icon}</span>
-                  <span className={`text-sm font-medium ${selectedStyle === key ? 'text-pink-700' : 'text-stone-700'}`}>
+                  <span className={`text-sm font-medium ${isSelected ? 'text-pink-700' : 'text-stone-700'}`}>
                     {info.label}
                   </span>
                   <span className="text-[11px] text-stone-400 leading-tight line-clamp-2">{info.desc}</span>
                 </button>
-              ))}
+              )})}
             </div>
           </div>
 
@@ -578,13 +708,13 @@ function CreateProjectDialog({
             </Label>
             <Textarea
               placeholder="简单描述你的故事设定、主角、世界观..."
-              maxLength={200}
+              maxLength={500}
               rows={3}
               value={synopsis}
               onChange={(e) => setSynopsis(e.target.value)}
               className="bg-stone-50 border-stone-200 focus:border-pink-300 focus:ring-pink-200/50 resize-none text-stone-800 placeholder:text-stone-400"
             />
-            <p className="text-[11px] text-stone-400 text-right">{synopsis.length}/200</p>
+            <p className="text-[11px] text-stone-400 text-right">{synopsis.length}/500</p>
           </div>
 
           {/* Cover Upload (optional) */}
@@ -594,7 +724,13 @@ function CreateProjectDialog({
               <span className="text-xs text-stone-400 ml-2 font-normal">可选，后期可添加</span>
             </Label>
             <input ref={coverInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
-              const f = e.target.files?.[0]; if (f && ['image/png','image/jpeg','image/webp'].includes(f.type)) setCoverPreview(URL.createObjectURL(f))
+              const f = e.target.files?.[0]; if (f && ['image/png','image/jpeg','image/webp'].includes(f.type)) {
+                setCoverPreview(URL.createObjectURL(f));
+                // 同时读成 base64 data URL 以便存储
+                const reader = new FileReader();
+                reader.onload = () => setCoverDataUrl(reader.result as string);
+                reader.readAsDataURL(f);
+              }
             }} className="hidden" />
             {coverPreview ? (
               <div className="relative rounded-lg overflow-hidden border border-pink-200">
@@ -623,10 +759,23 @@ function CreateProjectDialog({
             取消
           </Button>
           <Button
-            onClick={() => {
-              if (gameName.trim() && selectedStyle && selectedSetting && selectedStructure) {
-                onCreate({ name: gameName.trim(), style: selectedStyle, setting: selectedSetting, structure: selectedStructure, chapterCount, synopsis })
-                setGameName(''); setSelectedStyle(''); setSelectedSetting(''); setSelectedStructure(''); setChapterCount(6); setSynopsis(''); setCoverPreview(null)
+            onClick={async () => {
+              if (gameName.trim() && selectedStyles.length > 0 && selectedSetting && selectedStructure) {
+                let finalCoverUrl = ""
+                let coverDisplayUrl = ""
+                if (coverDataUrl) {
+                  const blob = await fetch(coverDataUrl).then(r => r.blob())
+                  const fd = new FormData()
+                  fd.append("cover", blob, "cover.png")
+                  const uploadRes = await fetch("/api/projects/cover", { method: "POST", body: fd })
+                  const uploadJson = await uploadRes.json()
+                  if (uploadJson.success) {
+                    finalCoverUrl = uploadJson.data.cdnUrl
+                    coverDisplayUrl = uploadJson.data.cdnUrl
+                  }
+                }
+                onCreate({ name: gameName.trim(), style: selectedStyles.join(","), setting: selectedSetting, structure: selectedStructure, chapterCount, synopsis, coverUrl: finalCoverUrl, coverDisplayUrl })
+                setGameName(''); setSelectedStyles([]); setSelectedSetting(''); setSelectedStructure(''); setChapterCount(6); setSynopsis(''); setCoverPreview(null); setCoverDataUrl("")
               }
               onOpenChange(false);
             }}
@@ -649,22 +798,24 @@ function SettingsDialog({
 }: {
   project: GameProject | null;
   onClose: () => void;
-  onSave: (id: string, data: { name: string; style: string; setting: string; synopsis: string }) => void;
+  onSave: (id: string, data: { name: string; style: string; setting: string; synopsis: string; coverUrl: string; coverDisplayUrl: string }) => void;
 }) {
   const [name, setName] = useState('')
-  const [selectedStyle, setSelectedStyle] = useState('')
+  const [selectedStyles, setSelectedStyles] = useState<string[]>([])
   const [selectedSetting, setSelectedSetting] = useState('')
   const [synopsis, setSynopsis] = useState('')
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [coverDataUrl, setCoverDataUrl] = useState("")
   const coverInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (project) {
       setName(project.name)
-      setSelectedStyle(project.style)
+      setSelectedStyles(project.style.split(",").filter(Boolean))
       setSelectedSetting(project.setting)
       setSynopsis(project.synopsis || '')
-      setCoverPreview(null)
+      setCoverPreview(project.cover_url || null)
+      setCoverDataUrl("")
     }
   }, [project])
 
@@ -672,6 +823,9 @@ function SettingsDialog({
     const file = e.target.files?.[0]; if (!file) return
     if (!['image/png','image/jpeg','image/webp'].includes(file.type)) return
     setCoverPreview(URL.createObjectURL(file))
+    const reader = new FileReader()
+    reader.onload = () => setCoverDataUrl(reader.result as string)
+    reader.readAsDataURL(file)
   }
 
   return (
@@ -704,21 +858,23 @@ function SettingsDialog({
               <span className="text-xs text-stone-400 ml-2 font-normal">决定故事的情绪基调</span>
             </Label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {Object.entries(STYLE_LABELS).map(([key, info]) => (
-                <button key={key} type="button" onClick={() => setSelectedStyle(key)}
+              {Object.entries(STYLE_LABELS).map(([key, info]) => {
+                  const isSelected = selectedStyles.includes(key)
+                  return (
+                <button key={key} type="button" onClick={() => setSelectedStyles(prev => isSelected ? prev.filter(s => s !== key) : [...prev, key])}
                   className={`relative flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-all duration-200 ${
-                    selectedStyle === key ? 'border-pink-400 bg-pink-50/80 shadow-sm shadow-pink-100' : 'border-stone-200 bg-white hover:border-pink-200 hover:bg-pink-50/30'
+                    isSelected ? 'border-pink-400 bg-pink-50/80 shadow-sm shadow-pink-100' : 'border-stone-200 bg-white hover:border-pink-200 hover:bg-pink-50/30'
                   }`}>
-                  {selectedStyle === key && (
+                  {isSelected && (
                     <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-pink-400 text-white">
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                     </span>
                   )}
                   <span className="text-xl">{info.icon}</span>
-                  <span className={`text-sm font-medium ${selectedStyle === key ? 'text-pink-700' : 'text-stone-700'}`}>{info.label}</span>
+                  <span className={`text-sm font-medium ${isSelected ? 'text-pink-700' : 'text-stone-700'}`}>{info.label}</span>
                   <span className="text-[11px] text-stone-400 leading-tight line-clamp-2">{info.desc}</span>
                 </button>
-              ))}
+              )})}
             </div>
           </div>
 
@@ -751,9 +907,9 @@ function SettingsDialog({
             <Label className="text-sm font-medium text-stone-700">
               世界观设定 <span className="text-xs text-stone-400 ml-2 font-normal">AI 将基于此生成剧情</span>
             </Label>
-            <Textarea placeholder="简单描述你的故事设定、主角、世界观..." maxLength={200} rows={3} value={synopsis} onChange={(e) => setSynopsis(e.target.value)}
+            <Textarea placeholder="简单描述你的故事设定、主角、世界观..." maxLength={500} rows={3} value={synopsis} onChange={(e) => setSynopsis(e.target.value)}
               className="bg-stone-50 border-stone-200 focus:border-pink-300 focus:ring-pink-200/50 resize-none text-stone-800 placeholder:text-stone-400" />
-            <p className="text-[11px] text-stone-400 text-right">{synopsis.length}/200</p>
+            <p className="text-[11px] text-stone-400 text-right">{synopsis.length}/500</p>
           </div>
 
           {/* Cover Upload (optional) */}
@@ -781,7 +937,23 @@ function SettingsDialog({
 
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-stone-100">
           <Button variant="outline" onClick={onClose} className="border-stone-200 text-stone-600 hover:bg-stone-50">取消</Button>
-          <Button onClick={() => { if (name.trim()) { onSave(project!.id, { name: name.trim(), style: selectedStyle, setting: selectedSetting, synopsis }); } }} disabled={!name.trim()}
+          <Button onClick={async () => {
+            if (!name.trim() || !project) return
+            let finalCoverUrl = project.cover_url || ""
+            let coverDisplayUrl = ""
+            if (coverDataUrl) {
+              const blob = await fetch(coverDataUrl).then(r => r.blob())
+              const fd = new FormData()
+              fd.append("cover", blob, "cover.png")
+              const uploadRes = await fetch("/api/projects/cover", { method: "POST", body: fd })
+              const uploadJson = await uploadRes.json()
+              if (uploadJson.success) {
+                finalCoverUrl = uploadJson.data.cdnUrl
+                coverDisplayUrl = uploadJson.data.cdnUrl
+              }
+            }
+            onSave(project.id, { name: name.trim(), style: selectedStyles.join(","), setting: selectedSetting, synopsis, coverUrl: finalCoverUrl, coverDisplayUrl })
+          }} disabled={!name.trim()}
             className="bg-gradient-to-r from-pink-400 to-violet-400 hover:from-pink-500 hover:to-violet-500 text-white shadow-md shadow-pink-200/50">
             <Sparkles className="mr-2 h-4 w-4" />保存设置</Button>
         </div>

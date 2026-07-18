@@ -4,16 +4,16 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import { useSearchParams } from 'next/navigation'
 import type { ProjectData, Chapter, KeyPoint, Ending } from '@/app/editor/_lib/types'
 import { mockProjects } from '@/lib/mock-projects'
-import { generateMockOutline } from '@/app/editor/_lib/utils'
+import { generateMockOutline, generateChapterSkeleton } from '@/app/editor/_lib/utils'
+import { useProjectStore } from '@/lib/project-store-zustand'
+
+// ── Context API 不变，组件无需改动 ──
 
 interface ProjectContextType {
   project: ProjectData | null
   projectId: string
-
-  // Save
   saveProject: (updatedProject: ProjectData) => void
   showSaved: boolean
-
   // Chapter CRUD
   updateChapter: (chapterId: string, updates: Partial<Chapter>) => void
   addChapter: (route?: string) => void
@@ -22,13 +22,11 @@ interface ProjectContextType {
   cancelDelete: () => void
   deleteConfirmId: string | null
   addRoute: (route: string, chapterCount?: number, endingType?: string) => void
-
   // Key Point
   addKeyPoint: (chapterId: string, keyPointData?: KeyPoint) => void
   updateKeyPoint: (chapterId: string, keyPointId: string, text: string) => void
   updateKeyPointData: (keyPoint: KeyPoint) => void
   deleteKeyPoint: (chapterId: string, keyPointId: string) => void
-
   // Ending
   addEnding: (endingData?: Ending) => void
   updateEnding: (endingId: string, updates: Partial<Ending>) => void
@@ -36,7 +34,6 @@ interface ProjectContextType {
   confirmDeleteEnding: () => void
   cancelDeleteEnding: () => void
   deleteEndingConfirmId: string | null
-
   // AI Generate
   isGenerating: boolean
   handleGenerateOutline: (description?: string, requirements?: string) => Promise<void>
@@ -44,8 +41,7 @@ interface ProjectContextType {
   handleAIGenerateKeyPoint: (keyPointId: string) => void
   isGeneratingEnding: boolean
   handleAIGenerateEnding: (endingId: string) => void
-
-  // Undo state (shared across pages)
+  // Undo
   showUndoToast: boolean
   deletedChapter: { chapter: Chapter; index: number } | null
   undoDelete: () => void
@@ -54,8 +50,7 @@ interface ProjectContextType {
   deletedEnding: { ending: Ending; index: number } | null
   undoDeleteEnding: () => void
   dismissEndingUndoToast: () => void
-
-  // Editing chapter inline (for outline page)
+  // Inline editing
   editingChapterId: string | null
   editTitle: string
   editSummary: string
@@ -74,486 +69,356 @@ export function useProject() {
   return ctx
 }
 
+// ── Provider ──
+
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams()
-  const projectId = searchParams.get('id') || 'demo'
+  const projectId = searchParams.get('id') || ''
 
-  const [project, setProject] = useState<ProjectData | null>(null)
+  // ── Zustand store（内存 + localStorage） ──
+  const storeProject = useProjectStore(s => s.project)
+  const storeLoading = useProjectStore(s => s.loading)
+  const storeShowSaved = useProjectStore(s => s.showSaved)
+  const { loadProject, saveProject: storeSave, setShowSaved } = useProjectStore(s => s.actions)
+
+  // ── Local UI state ──
   const [isGenerating, setIsGenerating] = useState(false)
   const [isGeneratingKeyPoint, setIsGeneratingKeyPoint] = useState(false)
   const [isGeneratingEnding, setIsGeneratingEnding] = useState(false)
-  const [editingChapterId, setEditingChapterId] = useState<string | null>(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editSummary, setEditSummary] = useState('')
-  const [showSaved, setShowSaved] = useState(false)
-
-  // Delete confirmation and undo states
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [deletedChapter, setDeletedChapter] = useState<{ chapter: Chapter; index: number } | null>(null)
   const [showUndoToast, setShowUndoToast] = useState(false)
   const undoTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  // Ending delete confirmation and undo states
   const [deleteEndingConfirmId, setDeleteEndingConfirmId] = useState<string | null>(null)
   const [deletedEnding, setDeletedEnding] = useState<{ ending: Ending; index: number } | null>(null)
   const [showEndingUndoToast, setShowEndingUndoToast] = useState(false)
   const endingUndoTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [editingChapterId, setEditingChapterId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editSummary, setEditSummary] = useState('')
 
-  // Load project from localStorage
+  // ── 加载项目：Zustand store 内部处理 localStorage → API 后台刷新 ──
   useEffect(() => {
-    const saved = localStorage.getItem(`project-${projectId}`)
-    if (saved) {
-      setProject(JSON.parse(saved))
-    } else {
-      // Load from mock data
-      const mock = mockProjects.find(p => p.id === projectId)
-      const structure = mock?.structure || '分支叙事'
-      const chCount = mock?.chapter_count || 6
-      const chapters = generateMockOutline(mock?.name || '未命名', structure, chCount)
-      const isMultiEnding = structure === '多结局'
-      const defaultEndings: Ending[] = isMultiEnding ? [
-        { id: 'end-1', type: 'GE', name: 'Good End', description: '最佳结局，所有谜团解开，与重要的人在一起' },
-        { id: 'end-2', type: 'NE', name: 'Normal End', description: '普通结局，留下了些许遗憾' },
-        { id: 'end-3', type: 'BE', name: 'Bad End', description: '悲剧结局，未能挽回的失去' },
-        { id: 'end-4', type: 'TE', name: 'True End', description: '真正的结局，揭示世界的真相' },
-      ] : []
+    if (!projectId) return
+    loadProject(projectId)
 
-      setProject({
-        id: projectId,
-        name: mock?.name || '未命名项目',
-        emotionStyle: mock?.style || '恋爱喜剧',
-        themeBackground: mock?.setting || '校园',
-        narrativeStructure: structure,
-        synopsis: mock?.synopsis || '',
-        chapterCount: chCount,
-        chapters,
-        endings: defaultEndings,
-      })
+    // 兜底：如果 localStorage 和 API 都没有，从 mock 生成初始项目
+    const checkAndInit = () => {
+      const st = useProjectStore.getState()
+      if (!st.loading && !st.project) {
+        const mock = mockProjects.find(p => p.id === projectId)
+        const structure = mock?.structure || '分支叙事'
+        const chCount = mock?.chapter_count || 6
+        const chapters = generateChapterSkeleton(structure, chCount)
+        const fallback: ProjectData = {
+          id: projectId,
+          name: mock?.name || '未命名项目',
+          emotionStyle: mock?.style || '恋爱喜剧',
+          themeBackground: mock?.setting || '校园',
+          narrativeStructure: structure,
+          synopsis: mock?.synopsis || '',
+          chapterCount: chCount,
+          chapters,
+          endings: [],
+        }
+        storeSave(fallback)
+      }
+    }
+
+    if (!storeLoading && !storeProject) {
+      checkAndInit()
     }
   }, [projectId])
 
-  // Save to localStorage
-  const saveProject = useCallback((updatedProject: ProjectData) => {
-    setProject(updatedProject)
-    localStorage.setItem(`project-${projectId}`, JSON.stringify(updatedProject))
+  // Re-check when store state changes
+  useEffect(() => {
+    if (!storeLoading && !storeProject && projectId) {
+      const mock = mockProjects.find(p => p.id === projectId)
+      if (mock) {
+        const structure = mock?.structure || '分支敘事'
+        const chapters = generateChapterSkeleton(structure, mock.chapter_count || 6)
+        storeSave({
+          id: projectId, name: mock.name, emotionStyle: mock.style || '恋爱喜剧',
+          themeBackground: mock.setting || '校园', narrativeStructure: structure,
+          synopsis: mock.synopsis || '', chapterCount: mock.chapter_count || 6,
+          chapters, endings: [],
+        })
+      }
+    }
+  }, [storeLoading, storeProject, projectId])
+
+  // ── Save ──
+  const saveProject = useCallback((updated: ProjectData) => {
+    storeSave(updated)
     setShowSaved(true)
     setTimeout(() => setShowSaved(false), 2000)
-  }, [projectId])
+  }, [storeSave, setShowSaved])
 
-  // Generate outline
-  const handleGenerateOutline = async (description?: string, requirements?: string) => {
-    if (!project) return
-    setIsGenerating(true)
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    const chapters = generateMockOutline(project.name, project.narrativeStructure, project.chapterCount, description, requirements)
-    saveProject({ ...project, chapters })
-    setIsGenerating(false)
-  }
+  // ── Chapter CRUD ──
+  const updateChapter = useCallback((chapterId: string, updates: Partial<Chapter>) => {
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const chapters = st.project.chapters.map(ch => ch.id === chapterId ? { ...ch, ...updates } : ch)
+    storeSave({ ...st.project, chapters })
+  }, [storeSave])
 
-  // AI Generate for Key Point
-  const handleAIGenerateKeyPoint = async (keyPointId: string) => {
-    setIsGeneratingKeyPoint(true)
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    const mockDescriptions = [
-      '主角在樱花树下与女主角初次相遇，两人一见如故，展开了一段美好的校园生活。',
-      '在夏日的祭典上，主角鼓起勇气向心仪的人表白，却意外发现对方也有同样的心意。',
-      '秋天的校园里，主角和伙伴们一起为文化祭做准备，在忙碌中加深了彼此的羁绊。',
-      '冬日的雪景中，主角回忆起与女主角的点点滴滴，决定不再逃避自己的感情。',
-    ]
-    const randomDesc = mockDescriptions[Math.floor(Math.random() * mockDescriptions.length)]
-
-    if (project) {
-      const updatedChapters = project.chapters.map(ch => ({
-        ...ch,
-        keyPoints: ch.keyPoints.map((kp: KeyPoint) =>
-          kp.id === keyPointId ? { ...kp, description: randomDesc } : kp
-        )
-      }))
-      saveProject({ ...project, chapters: updatedChapters })
+  const addChapter = useCallback((route?: string) => {
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const mainChapters = st.project.chapters.filter(c => !c.endingType)
+    const endingChapters = st.project.chapters.filter(c => c.endingType)
+    const chCount = mainChapters.length
+    const newCh: Chapter = {
+      id: `ch-${Date.now()}`,
+      number: chCount + 1,
+      title: `第${chCount + 1}章`,
+      summary: '',
+      scenes: [],
+      keyPoints: [],
+      route: route || 'common',
     }
-    setIsGeneratingKeyPoint(false)
-  }
+    // 主线章节插在结局章节前面
+    storeSave({ ...st.project, chapters: [...mainChapters, newCh, ...endingChapters] })
+  }, [storeSave])
 
-  // AI Generate for Ending
-  const handleAIGenerateEnding = async (endingId: string) => {
-    setIsGeneratingEnding(true)
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    const mockDescriptions = [
-      '主角与女主角在毕业典礼上正式确认了彼此的心意，携手走向美好的未来。',
-      '虽然最终没能在一起，但那段美好的回忆将永远珍藏在心中。',
-      '经历了重重考验，主角终于明白了什么是真正的幸福，与心爱的人共度余生。',
-      '在命运的捉弄下，主角做出了艰难的选择，走向了意想不到的结局。',
-    ]
-    const randomDesc = mockDescriptions[Math.floor(Math.random() * mockDescriptions.length)]
-
-    if (project && project.endings) {
-      const updatedEndings = project.endings.map(e =>
-        e.id === endingId ? { ...e, description: randomDesc } : e
-      )
-      saveProject({ ...project, endings: updatedEndings })
-    }
-    setIsGeneratingEnding(false)
-  }
-
-  // Update chapter
-  const updateChapter = (chapterId: string, updates: Partial<Chapter>) => {
-    if (!project) return
-    const updatedChapters = project.chapters.map(ch =>
-      ch.id === chapterId ? { ...ch, ...updates } : ch
-    )
-    saveProject({ ...project, chapters: updatedChapters })
-  }
-
-  // Request delete chapter (show confirmation)
-  const requestDeleteChapter = (chapterId: string) => {
+  const requestDeleteChapter = useCallback((chapterId: string) => {
     setDeleteConfirmId(chapterId)
-  }
+  }, [])
 
-  // Confirm delete chapter
-  const confirmDeleteChapter = () => {
-    if (!project || !deleteConfirmId) return
-
-    const chapterIndex = project.chapters.findIndex(ch => ch.id === deleteConfirmId)
-    const chapterToDelete = project.chapters[chapterIndex]
-
-    if (!chapterToDelete) return
-
-    // Store deleted chapter for undo
-    setDeletedChapter({ chapter: chapterToDelete, index: chapterIndex })
-
-    const updatedChapters = project.chapters
-      .filter(ch => ch.id !== deleteConfirmId)
-      .map((ch, idx) => ({ ...ch, number: idx + 1 }))
-    saveProject({ ...project, chapters: updatedChapters })
-
-    // Clear confirmation
+  const confirmDeleteChapter = useCallback(() => {
+    if (!deleteConfirmId) return
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const idx = st.project.chapters.findIndex(c => c.id === deleteConfirmId)
+    if (idx === -1) return
+    const chapter = st.project.chapters[idx]
+    const updated = st.project.chapters.filter(c => c.id !== deleteConfirmId)
+    storeSave({ ...st.project, chapters: updated })
+    setDeletedChapter({ chapter, index: idx })
     setDeleteConfirmId(null)
-
-    // Show undo toast
     setShowUndoToast(true)
-
-    // Clear previous timeout
-    if (undoTimeoutRef.current) {
-      clearTimeout(undoTimeoutRef.current)
-    }
-
-    // Auto-hide undo toast after 5 seconds (fade then clear)
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current)
     undoTimeoutRef.current = setTimeout(() => {
       setShowUndoToast(false)
-      setTimeout(() => setDeletedChapter(null), 400)
+      setTimeout(() => setDeletedChapter(null), 500)
     }, 5000)
-  }
+  }, [deleteConfirmId, storeSave])
 
-  // Cancel delete
-  const cancelDelete = () => {
-    setDeleteConfirmId(null)
-  }
+  const cancelDelete = useCallback(() => setDeleteConfirmId(null), [])
 
-  // Undo delete
-  const undoDelete = () => {
-    if (!project || !deletedChapter) return
-
-    // Clear timeout
-    if (undoTimeoutRef.current) {
-      clearTimeout(undoTimeoutRef.current)
-    }
-
-    // Restore chapter at original position
-    const restoredChapter = { ...deletedChapter.chapter, number: deletedChapter.index + 1 }
-    const updatedChapters = [...project.chapters]
-    updatedChapters.splice(deletedChapter.index, 0, restoredChapter)
-
-    // Renumber all chapters
-    const renumberedChapters = updatedChapters.map((ch, idx) => ({ ...ch, number: idx + 1 }))
-    saveProject({ ...project, chapters: renumberedChapters })
-
-    // Clear undo state
-    setShowUndoToast(false)
+  const undoDelete = useCallback(() => {
+    if (!deletedChapter) return
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const chapters = [...st.project.chapters]
+    chapters.splice(deletedChapter.index, 0, deletedChapter.chapter)
+    storeSave({ ...st.project, chapters })
     setDeletedChapter(null)
-  }
-
-  // Dismiss undo toast
-  const dismissUndoToast = () => {
-    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current)
     setShowUndoToast(false)
-    setTimeout(() => setDeletedChapter(null), 400)
-  }
+  }, [deletedChapter, storeSave])
 
-  // Add chapter
-  const addChapter = (route?: string) => {
-    if (!project) return
-    const chapterRoute = route || 'common'
+  const dismissUndoToast = useCallback(() => {
+    setShowUndoToast(false)
+    setTimeout(() => setDeletedChapter(null), 500)
+  }, [])
 
-    // 根据路线类型计算章节编号
-    const routeChapters = project.chapters.filter(ch => ch.route === chapterRoute)
-    const chapterNumber = routeChapters.length + 1
-
-    // 计算显示编号（共通线从1开始，个人线接着共通线）
-    const commonChapterCount = project.chapters.filter(ch => ch.route === 'common').length
-    const displayNumber = chapterRoute === 'common'
-      ? chapterNumber
-      : commonChapterCount + chapterNumber
-
-    const newChapter: Chapter = {
-      id: `ch-${Date.now()}`,
-      number: chapterNumber,
-      title: `第${toChineseNumberInternal(displayNumber)}章`,
-      summary: '点击编辑章节摘要...',
-      scenes: project.narrativeStructure === '多结局' ? [] : ['场景1'],
-      keyPoints: [{ id: `kp-${Date.now()}`, text: '要点1' }],
-      route: chapterRoute,
-    }
-    saveProject({ ...project, chapters: [...project.chapters, newChapter] })
-  }
-
-  // Add ending (for multi-ending mode)
-  const addEnding = (endingData?: Ending) => {
-    if (!project) return
-    const endingTypes: Ending['type'][] = ['GE', 'NE', 'BE', 'TE']
-    const existingTypes = project.endings?.map((e: Ending) => e.type) || []
-    const nextType = endingData?.type || endingTypes.find(t => !existingTypes.includes(t)) || 'GE'
-    const typeLabels: Record<Ending['type'], string> = {
-      GE: 'Good End',
-      NE: 'Normal End',
-      BE: 'Bad End',
-      TE: 'True End',
-    }
-    const newEnding: Ending = endingData || {
-      id: `end-${Date.now()}`,
-      type: nextType,
-      name: typeLabels[nextType],
-      description: '',
-    }
-    saveProject({ ...project, endings: [...(project.endings || []), newEnding] })
-  }
-
-  // Request delete ending (show confirmation)
-  const requestDeleteEnding = (endingId: string) => {
-    setDeleteEndingConfirmId(endingId)
-  }
-
-  // Confirm delete ending
-  const confirmDeleteEnding = () => {
-    if (!project || !deleteEndingConfirmId) return
-
-    const endingIndex = (project.endings || []).findIndex(e => e.id === deleteEndingConfirmId)
-    const endingToDelete = (project.endings || [])[endingIndex]
-
-    if (!endingToDelete) return
-
-    // Store deleted ending for undo
-    setDeletedEnding({ ending: endingToDelete, index: endingIndex })
-
-    const updatedEndings = (project.endings || []).filter(e => e.id !== deleteEndingConfirmId)
-    saveProject({ ...project, endings: updatedEndings })
-
-    // Clear confirmation
-    setDeleteEndingConfirmId(null)
-
-    // Show undo toast
-    setShowEndingUndoToast(true)
-
-    // Clear previous timeout
-    if (endingUndoTimeoutRef.current) {
-      clearTimeout(endingUndoTimeoutRef.current)
-    }
-
-    endingUndoTimeoutRef.current = setTimeout(() => {
-      setShowEndingUndoToast(false)
-      setTimeout(() => setDeletedEnding(null), 400)
-    }, 5000)
-  }
-
-  // Cancel delete ending
-  const cancelDeleteEnding = () => {
-    setDeleteEndingConfirmId(null)
-  }
-
-  // Undo delete ending
-  const undoDeleteEnding = () => {
-    if (!project || !deletedEnding) return
-
-    // Clear timeout
-    if (endingUndoTimeoutRef.current) {
-      clearTimeout(endingUndoTimeoutRef.current)
-    }
-
-    // Restore ending at original position
-    const updatedEndings = [...(project.endings || [])]
-    updatedEndings.splice(deletedEnding.index, 0, deletedEnding.ending)
-    saveProject({ ...project, endings: updatedEndings })
-
-    // Clear states
-    setShowEndingUndoToast(false)
-    setDeletedEnding(null)
-  }
-
-  // Dismiss ending undo toast
-  const dismissEndingUndoToast = () => {
-    if (endingUndoTimeoutRef.current) clearTimeout(endingUndoTimeoutRef.current)
-    setShowEndingUndoToast(false)
-    setTimeout(() => setDeletedEnding(null), 400)
-  }
-
-  // Update ending
-  const updateEnding = (endingId: string, updates: Partial<Ending>) => {
-    if (!project) return
-    const updatedEndings = (project.endings || []).map((e: Ending) =>
-      e.id === endingId ? { ...e, ...updates } : e
-    )
-    saveProject({ ...project, endings: updatedEndings })
-  }
-
-  // Add key point
-  const addKeyPoint = (chapterId: string, keyPointData?: KeyPoint) => {
-    if (!project) return
-    const chapter = project.chapters.find(ch => ch.id === chapterId)
-    if (!chapter) return
-    const newKeyPoint: KeyPoint = keyPointData || {
-      id: `kp-${Date.now()}`,
-      text: '新要点',
-    }
-    updateChapter(chapterId, { keyPoints: [...chapter.keyPoints, newKeyPoint] })
-  }
-
-  // Update key point
-  const updateKeyPoint = (chapterId: string, keyPointId: string, text: string) => {
-    if (!project) return
-    const chapter = project.chapters.find(ch => ch.id === chapterId)
-    if (!chapter) return
-    const updatedKeyPoints = chapter.keyPoints.map(kp =>
-      kp.id === keyPointId ? { ...kp, text } : kp
-    )
-    updateChapter(chapterId, { keyPoints: updatedKeyPoints })
-  }
-
-  // Update key point data (full object including description)
-  const updateKeyPointData = (keyPoint: KeyPoint) => {
-    if (!project) return
-    // Find which chapter contains this key point
-    const chapter = project.chapters.find(ch => ch.keyPoints.some(kp => kp.id === keyPoint.id))
-    if (!chapter) return
-    const updatedKeyPoints = chapter.keyPoints.map(kp =>
-      kp.id === keyPoint.id ? keyPoint : kp
-    )
-    updateChapter(chapter.id, { keyPoints: updatedKeyPoints })
-  }
-
-  // Delete key point
-  const deleteKeyPoint = (chapterId: string, keyPointId: string) => {
-    if (!project) return
-    const chapter = project.chapters.find(ch => ch.id === chapterId)
-    if (!chapter) return
-    const updatedKeyPoints = chapter.keyPoints.filter(kp => kp.id !== keyPointId)
-    updateChapter(chapterId, { keyPoints: updatedKeyPoints })
-  }
-
-  // Add route
-  const addRoute = (routeName: string, chapterCount: number = 1, endingType?: string) => {
-    if (!project) return
-    const commonChapterCount = project.chapters.filter(ch => ch.route === 'common').length
-    const isEnding = !!endingType
-
+  const addRoute = useCallback((route: string, chapterCount?: number, endingType?: string) => {
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const count = chapterCount || 2
+    const mainChapters = st.project.chapters.filter(c => !c.endingType)
+    const endingChapters = st.project.chapters.filter(c => c.endingType)
+    const mainCount = mainChapters.length
     const newChapters: Chapter[] = []
-    for (let i = 0; i < chapterCount; i++) {
-      const chapterNumber = commonChapterCount + i + 1
+    for (let i = 0; i < count; i++) {
       newChapters.push({
-        id: `ch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        number: chapterNumber,
-        title: isEnding ? routeName : `${routeName} 第${toChineseNumberInternal(chapterNumber)}章`,
-        summary: '在此输入章节摘要...',
-        scenes: ['新场景'],
+        id: `ch-${Date.now()}-${i}`,
+        number: mainCount + i + 1,
+        title: `第${mainCount + i + 1}章`,
+        summary: '',
+        scenes: [],
         keyPoints: [],
-        route: routeName,
-        endingType: endingType || undefined,
+        route,
       })
     }
+    // 插入到主线之后、结局之前
+    storeSave({ ...st.project, chapters: [...mainChapters, ...newChapters, ...endingChapters] })
+  }, [storeSave])
 
-    setProject({
-      ...project,
-      chapters: [...project.chapters, ...newChapters],
+  // ── Key Point CRUD ──
+  const addKeyPoint = useCallback((chapterId: string, keyPointData?: KeyPoint) => {
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const kp: KeyPoint = keyPointData || {
+      id: `kp-${Date.now()}`,
+      text: '新关键点',
+      description: '',
+    }
+    const chapters = st.project.chapters.map(ch =>
+      ch.id === chapterId ? { ...ch, keyPoints: [...ch.keyPoints, kp] } : ch
+    )
+    storeSave({ ...st.project, chapters })
+  }, [storeSave])
+
+  const updateKeyPoint = useCallback((chapterId: string, keyPointId: string, text: string) => {
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const chapters = st.project.chapters.map(ch =>
+      ch.id === chapterId ? {
+        ...ch,
+        keyPoints: ch.keyPoints.map(kp => kp.id === keyPointId ? { ...kp, text } : kp)
+      } : ch
+    )
+    storeSave({ ...st.project, chapters })
+  }, [storeSave])
+
+  const updateKeyPointData = useCallback((keyPoint: KeyPoint) => {
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const chapters = st.project.chapters.map(ch => ({
+      ...ch,
+      keyPoints: ch.keyPoints.map(kp => kp.id === keyPoint.id ? keyPoint : kp)
+    }))
+    storeSave({ ...st.project, chapters })
+  }, [storeSave])
+
+  const deleteKeyPoint = useCallback((chapterId: string, keyPointId: string) => {
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const chapters = st.project.chapters.map(ch =>
+      ch.id === chapterId ? { ...ch, keyPoints: ch.keyPoints.filter(kp => kp.id !== keyPointId) } : ch
+    )
+    storeSave({ ...st.project, chapters })
+  }, [storeSave])
+
+  // ── Ending CRUD ──
+  const addEnding = useCallback((endingData?: Ending) => {
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const ending: Ending = endingData || {
+      id: `end-${Date.now()}`,
+      type: 'GE',
+      name: '新结局',
+      description: '',
+    }
+    storeSave({ ...st.project, endings: [...(st.project.endings || []), ending] })
+  }, [storeSave])
+
+  const updateEnding = useCallback((endingId: string, updates: Partial<Ending>) => {
+    const st = useProjectStore.getState()
+    if (!st.project || !st.project.endings) return
+    storeSave({
+      ...st.project,
+      endings: st.project.endings.map(e => e.id === endingId ? { ...e, ...updates } : e)
     })
-  }
+  }, [storeSave])
 
-  // Start editing
-  const startEditing = (chapter: Chapter) => {
+  const requestDeleteEnding = useCallback((endingId: string) => setDeleteEndingConfirmId(endingId), [])
+
+  const confirmDeleteEnding = useCallback(() => {
+    if (!deleteEndingConfirmId) return
+    const st = useProjectStore.getState()
+    if (!st.project?.endings) return
+    const idx = st.project.endings.findIndex(e => e.id === deleteEndingConfirmId)
+    if (idx === -1) return
+    const ending = st.project.endings[idx]
+    storeSave({ ...st.project, endings: st.project.endings.filter(e => e.id !== deleteEndingConfirmId) })
+    setDeletedEnding({ ending, index: idx })
+    setDeleteEndingConfirmId(null)
+    setShowEndingUndoToast(true)
+    if (endingUndoTimeoutRef.current) clearTimeout(endingUndoTimeoutRef.current)
+    endingUndoTimeoutRef.current = setTimeout(() => {
+      setShowEndingUndoToast(false)
+      setTimeout(() => setDeletedEnding(null), 500)
+    }, 5000)
+  }, [deleteEndingConfirmId, storeSave])
+
+  const cancelDeleteEnding = useCallback(() => setDeleteEndingConfirmId(null), [])
+
+  const undoDeleteEnding = useCallback(() => {
+    if (!deletedEnding) return
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    const endings = [...(st.project.endings || [])]
+    endings.splice(deletedEnding.index, 0, deletedEnding.ending)
+    storeSave({ ...st.project, endings })
+    setDeletedEnding(null)
+    setShowEndingUndoToast(false)
+  }, [deletedEnding, storeSave])
+
+  const dismissEndingUndoToast = useCallback(() => {
+    setShowEndingUndoToast(false)
+    setTimeout(() => setDeletedEnding(null), 500)
+  }, [])
+
+  // ── AI Generate ──
+  const handleGenerateOutline = useCallback(async (description?: string, _requirements?: string) => {
+    const st = useProjectStore.getState()
+    if (!st.project) return
+    setIsGenerating(true)
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    const chapters = generateMockOutline(st.project.name, st.project.narrativeStructure, st.project.chapterCount, description)
+    const sorted = [...chapters].sort((a, b) => a.number - b.number)
+    storeSave({ ...st.project, chapters: sorted })
+    setIsGenerating(false)
+  }, [storeSave])
+
+  const handleAIGenerateKeyPoint = useCallback((_keyPointId: string) => {
+    setIsGeneratingKeyPoint(true)
+    setTimeout(() => setIsGeneratingKeyPoint(false), 1500)
+  }, [])
+
+  const handleAIGenerateEnding = useCallback((_endingId: string) => {
+    setIsGeneratingEnding(true)
+    setTimeout(() => setIsGeneratingEnding(false), 1500)
+  }, [])
+
+  // ── Inline Editing ──
+  const startEditing = useCallback((chapter: Chapter) => {
     setEditingChapterId(chapter.id)
     setEditTitle(chapter.title)
     setEditSummary(chapter.summary)
-  }
+  }, [])
 
-  // Save edit
-  const saveEdit = () => {
-    if (!editingChapterId || !project) return
+  const saveEdit = useCallback(() => {
+    if (!editingChapterId) return
     updateChapter(editingChapterId, { title: editTitle, summary: editSummary })
     setEditingChapterId(null)
-  }
+    setEditTitle('')
+    setEditSummary('')
+  }, [editingChapterId, editTitle, editSummary, updateChapter])
 
-  // Cancel edit
-  const cancelEdit = () => {
+  const cancelEdit = useCallback(() => {
     setEditingChapterId(null)
-  }
+    setEditTitle('')
+    setEditSummary('')
+  }, [])
 
   return (
     <ProjectContext.Provider value={{
-      project,
+      project: storeProject,
       projectId,
       saveProject,
-      showSaved,
-      updateChapter,
-      addChapter,
-      requestDeleteChapter,
-      confirmDeleteChapter,
-      cancelDelete,
-      deleteConfirmId,
-      addRoute,
-      addKeyPoint,
-      updateKeyPoint,
-      updateKeyPointData,
-      deleteKeyPoint,
-      addEnding,
-      updateEnding,
-      requestDeleteEnding,
-      confirmDeleteEnding,
-      cancelDeleteEnding,
+      showSaved: storeShowSaved,
+      // Chapter
+      updateChapter, addChapter, requestDeleteChapter, confirmDeleteChapter, cancelDelete,
+      deleteConfirmId, addRoute,
+      // Key Point
+      addKeyPoint, updateKeyPoint, updateKeyPointData, deleteKeyPoint,
+      // Ending
+      addEnding, updateEnding, requestDeleteEnding, confirmDeleteEnding, cancelDeleteEnding,
       deleteEndingConfirmId,
-      isGenerating,
-      handleGenerateOutline,
-      isGeneratingKeyPoint,
-      handleAIGenerateKeyPoint,
-      isGeneratingEnding,
-      handleAIGenerateEnding,
-      showUndoToast,
-      deletedChapter,
-      undoDelete,
-      dismissUndoToast,
-      showEndingUndoToast,
-      deletedEnding,
-      undoDeleteEnding,
-      dismissEndingUndoToast,
-      editingChapterId,
-      editTitle,
-      editSummary,
-      setEditTitle,
-      setEditSummary,
-      startEditing,
-      saveEdit,
-      cancelEdit,
+      // AI
+      isGenerating, handleGenerateOutline, isGeneratingKeyPoint, handleAIGenerateKeyPoint,
+      isGeneratingEnding, handleAIGenerateEnding,
+      // Undo
+      showUndoToast, deletedChapter, undoDelete, dismissUndoToast,
+      showEndingUndoToast, deletedEnding, undoDeleteEnding, dismissEndingUndoToast,
+      // Inline edit
+      editingChapterId, editTitle, editSummary, setEditTitle, setEditSummary,
+      startEditing, saveEdit, cancelEdit,
     }}>
       {children}
     </ProjectContext.Provider>
   )
-}
-
-// Internal utility (local copy to avoid circular dependency)
-const toChineseNumberInternal = (num: number): string => {
-  const chineseNums = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
-  if (num <= 10) return chineseNums[num]
-  if (num < 20) return `十${num === 10 ? '' : chineseNums[num - 10]}`
-  if (num < 100) {
-    const tens = Math.floor(num / 10)
-    const ones = num % 10
-    return `${chineseNums[tens]}十${ones ? chineseNums[ones] : ''}`
-  }
-  return num.toString()
 }

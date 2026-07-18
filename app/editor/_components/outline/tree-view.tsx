@@ -92,10 +92,10 @@ export function TreeView({
                 </div>
                 <div className="space-y-2">
                   {commonChapters.map((chapter, idx) => (
-                    <ChapterCard key={chapter.id} {...props} chapter={chapter} index={idx} isBranching={isBranching} />
+                    <ChapterCard key={chapter.id} {...props} chapter={chapter} index={idx} isBranching={isBranching} displayNumber={idx + 1} />
                   ))}
                 </div>
-                {onAddChapter && hasBranches && (
+                {onAddChapter && (
                   <Button variant="ghost" size="sm" className="w-full mt-2 text-blue-600 hover:bg-blue-50 h-7 text-xs" onClick={() => onAddChapter('common')}>
                     <Plus className="h-3 w-3 mr-1" />{T.addCommon}
                   </Button>

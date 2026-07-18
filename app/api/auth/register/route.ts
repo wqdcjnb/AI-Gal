@@ -1,12 +1,10 @@
 /**
  * POST /api/auth/register
- * 注册 → 转发到云函数 auth-register，API Route 负责 Cookie 和 DB 写入
+ * 注册 → 转发到云函数 auth-register，API Route 负责 Cookie 和 SQLite 写入
  */
 import { registerUser } from "@/lib/auth/register";
 import { validatePasswordStrength } from "@/lib/auth/validate";
-import { db } from "@/lib/cloudbase";
 import { createUser } from "@/lib/user-store";
-import { COLLECTIONS } from "@/lib/db-schema";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -44,27 +42,8 @@ export async function POST(request: Request) {
       return NextResponse.json(result, { status: 400 });
     }
 
-    // 写入 users 集合（扩展信息）
-    if (result.username) {
-      try {
-        const existing = await db
-          .collection(COLLECTIONS.USERS)
-          .where({ uid: result.uid || email })
-          .limit(1)
-          .get();
-        if (!existing.data?.length) {
-          await db.collection(COLLECTIONS.USERS).add({
-            uid: result.uid || email,
-            email: email.trim().toLowerCase(),
-            username: result.username,
-            nickname: email.split("@")[0] || email,
-            avatarUrl: "",
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          });
-        }
-      } catch { /* 静默失败，不影响注册 */ }
-    }
+    // 写入 profiles 表
+    await createUser(result.uid || email, email.trim().toLowerCase());
 
     // 设置登录 Cookie
     const cookieStore = await cookies();

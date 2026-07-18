@@ -32,14 +32,13 @@ export default function OutlinePage() {
     editSummary,
     setEditTitle,
     setEditSummary,
+    updateChapter,
     startEditing,
     saveEdit,
     cancelEdit,
   } = useProject()
 
   // Local UI state (must be before any early returns)
-  const [showGenerateDialog, setShowGenerateDialog] = useState(false)
-  const [generateDescription, setGenerateDescription] = useState('')
   const [keyPointModalOpen, setKeyPointModalOpen] = useState(false)
   const [selectedKeyPoint, setSelectedKeyPoint] = useState<{ chapterId: string; keyPoint: KeyPoint } | null>(null)
   const [isNewKeyPoint, setIsNewKeyPoint] = useState(false)
@@ -99,7 +98,7 @@ export default function OutlinePage() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowGenerateDialog(true)}
+            onClick={() => handleGenerateOutline()}
             disabled={isGenerating}
             className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 px-4 py-2 text-sm font-medium text-white shadow-md shadow-pink-200/50 transition-all hover:shadow-lg hover:shadow-pink-300/50 disabled:opacity-50"
           >
@@ -122,7 +121,7 @@ export default function OutlinePage() {
       {isGenerating ? (
         <GeneratingSkeleton count={project.chapterCount} />
       ) : project.chapters.length === 0 ? (
-        <EmptyOutline onGenerate={() => handleGenerateOutline()} />
+        <EmptyOutline onGenerate={(desc) => handleGenerateOutline(desc)} />
       ) : isBranching ? (
         <TreeView
           chapters={project.chapters}
@@ -139,7 +138,7 @@ export default function OutlinePage() {
           onEditSummaryChange={setEditSummary}
           onSaveEdit={saveEdit}
           onCancelEdit={cancelEdit}
-          onEditChapter={startEditing}
+          onEditChapter={(chapter) => updateChapter(chapter.id, chapter)}
           onDeleteChapter={requestDeleteChapter}
           onAddKeyPoint={handleAddKeyPoint}
           onUpdateKeyPoint={updateKeyPoint}
@@ -156,7 +155,7 @@ export default function OutlinePage() {
           onEditSummaryChange={setEditSummary}
           onSaveEdit={saveEdit}
           onCancelEdit={cancelEdit}
-          onEditChapter={startEditing}
+          onEditChapter={(chapter) => updateChapter(chapter.id, chapter)}
           onDeleteChapter={requestDeleteChapter}
           onAddKeyPoint={handleAddKeyPoint}
           onUpdateKeyPoint={updateKeyPoint}
@@ -184,61 +183,6 @@ export default function OutlinePage() {
         onAIGenerate={handleAIGenerateKeyPoint}
         isGenerating={isGeneratingKeyPoint}
       />
-
-      {/* AI Generate Dialog */}
-      {showGenerateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-pink-100 to-violet-100">
-                <Sparkles className="h-5 w-5 text-pink-500" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">AI 生成大纲</h3>
-                <p className="text-xs text-muted-foreground">描述你的故事想法，或留空让 AI 自由发挥</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-foreground">
-                  故事描述 <span className="text-xs font-normal text-muted-foreground">（可选）</span>
-                </label>
-                <textarea
-                  value={generateDescription}
-                  onChange={(e) => setGenerateDescription(e.target.value)}
-                  placeholder="描述你想要的故事，留空则 AI 根据项目设定自由发挥..."
-                  className="h-32 w-full resize-none rounded-lg border border-border bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-pink-300 focus:outline-none focus:ring-2 focus:ring-pink-100"
-                />
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowGenerateDialog(false)
-                  setGenerateDescription('')
-                }}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                取消
-              </button>
-              <button
-                onClick={() => {
-                  handleGenerateOutline(generateDescription || undefined)
-                  setShowGenerateDialog(false)
-                  setGenerateDescription('')
-                }}
-                disabled={isGenerating}
-                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 px-4 py-2 text-sm font-medium text-white shadow-md transition-all hover:shadow-lg disabled:opacity-50"
-              >
-                <Sparkles className="h-4 w-4" />
-                开始生成
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Add Route Dialog */}
       <AddRouteDialog

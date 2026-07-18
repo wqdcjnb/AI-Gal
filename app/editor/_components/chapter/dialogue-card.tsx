@@ -286,7 +286,7 @@ function ChoicePanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any;
         {/* Options */}
         <label className="text-[10px] text-muted-foreground mb-1 block">选项 ({choices.length})</label>
         <div className="space-y-1.5 mb-3 max-h-48 overflow-y-auto">
-          {choices.map((c, i) => (
+          {choices.map((c: any, i: number) => (
             <div key={i} className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground w-5">{i + 1}.</span>
               <input type="text" value={c.text}
@@ -297,7 +297,7 @@ function ChoicePanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any;
                 }}
                 className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
                 placeholder={`选项 ${i + 1}`} />
-              <button onClick={() => setChoices(choices.filter((_, j) => j !== i))}
+              <button onClick={() => setChoices(choices.filter((_: any, j: number) => j !== i))}
                 className="text-muted-foreground hover:text-red-400"><X className="h-3.5 w-3.5" /></button>
             </div>
           ))}
@@ -319,6 +319,8 @@ function ChoicePanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any;
 
 // ── Indicator badges ──
 function IndicatorBadges({ dialogue }: { dialogue: DialogueCardProps['dialogue'] }) {
+  const [playing, setPlaying] = useState(false)
+
   return (
     <div className="flex items-center gap-1">
       {dialogue.backgroundChange && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-600">🖼️</span>}
@@ -326,7 +328,12 @@ function IndicatorBadges({ dialogue }: { dialogue: DialogueCardProps['dialogue']
       {dialogue.soundEffect && <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] text-green-600">🔊</span>}
       {dialogue.cgTrigger && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-600">🎬</span>}
       {dialogue.screenEffect && dialogue.screenEffect !== 'none' && <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-600">⚡</span>}
-      {dialogue.voiceId && <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] text-cyan-600">🎙️</span>}
+      {dialogue.voiceId && (
+        <span onClick={(e) => { e.stopPropagation(); setPlaying(!playing) }}
+          className={`rounded px-1.5 py-0.5 text-[10px] cursor-pointer transition-colors ${playing ? 'bg-cyan-200 text-cyan-800' : 'bg-cyan-100 text-cyan-600 hover:bg-cyan-200'}`}>
+          {playing ? '🔊' : '🎙️'}
+        </span>
+      )}
     </div>
   )
 }

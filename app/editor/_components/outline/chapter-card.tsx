@@ -94,7 +94,7 @@ export function ChapterCard({
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Summary - Always visible, click to edit when expanded */}
+          {/* Summary - always visible, click to edit */}
           {isEditingSummary ? (
             <div className="space-y-2">
               <textarea
@@ -105,35 +105,28 @@ export function ChapterCard({
                 autoFocus
               />
               <div className="flex items-center gap-2">
-                <button
-                  onClick={handleSummarySave}
-                  className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white"
-                >
-                  <Check className="h-3 w-3" />
-                  保存
+                <button onClick={handleSummarySave} className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white">
+                  <Check className="h-3 w-3" />保存
                 </button>
-                <button
-                  onClick={() => { setIsEditingSummary(false); setLocalSummary(chapter.summary) }}
-                  className="flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground"
-                >
-                  <X className="h-3 w-3" />
-                  取消
+                <button onClick={() => { setIsEditingSummary(false); setLocalSummary(chapter.summary) }} className="flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                  <X className="h-3 w-3" />取消
                 </button>
               </div>
             </div>
           ) : (
-            <p
+            <div
               onClick={() => !isCollapsed && setIsEditingSummary(true)}
               className={cn(
-                'cursor-pointer rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors',
+                'rounded-md px-2 py-1 text-sm transition-colors',
                 colors.hoverBg,
-                'hover:text-foreground',
                 compact && 'text-xs',
-                isCollapsed && 'cursor-default'
+                isCollapsed ? 'cursor-default' : 'cursor-pointer'
               )}
             >
-              {chapter.summary}
-            </p>
+              <span className={chapter.summary ? 'text-foreground' : 'text-muted-foreground'}>
+                {chapter.summary || '点击编辑章节摘要...'}
+              </span>
+            </div>
           )}
 
           {/* Collapsible Content */}
