@@ -1,208 +1,252 @@
 /**
- * 项目数据 Zustand Store — 三层缓存架构
+ * 项目数据 Store — 三层架构
  *
- * 第一层 内存（Zustand）   → 即时读写，组件间共享
- * 第二层 浏览器（localStorage） → 刷新不丢，启动时恢复
- * 第三层 数据库（CloudBase PG） → source of truth，后台同步
+ *   加载：IndexedDB(0ms) → Zustand → UI
+ *         后台 GET /full → 比较 version → 更新 Zustand + IndexedDB
  *
- * 用法：
- *   const project = useProjectStore(s => s.project)
- *   const { loadProject, saveProject } = useProjectStore(s => s.actions)
+ *   保存：组件 → Zustand(dirty) → IndexedDB(即时) → 30s → PATCH /full (version 校验)
  */
 import { create } from 'zustand'
-import type { ProjectData, Chapter, Character, Sprite, SavedCombo } from '@/app/editor/_lib/types'
+import type { ProjectData, Character, SavedCombo } from '@/app/editor/_lib/types'
 import { generateChapterSkeleton } from '@/app/editor/_lib/utils'
-
-// ============================================================
-// Store 类型
-// ============================================================
-
-interface ProjectStore {
-  // ── 项目数据 ──
-  projectId: string | null
-  project: ProjectData | null
-  characters: Character[]
-  savedCombos: Record<string, SavedCombo[]>
-
-  // ── UI 状态 ──
-  loading: boolean
-  showSaved: boolean
-
-  // ── Actions ──
-  actions: {
-    /** 加载项目（localStorage → 内存，后台从 API 刷新） */
-    loadProject: (id: string) => void
-    /** 保存项目（内存 → localStorage，后台 debounce → API） */
-    saveProject: (project: ProjectData) => void
-    saveCharacters: (chars: Character[]) => void
-    saveCombos: (combos: Record<string, SavedCombo[]>) => void
-    setShowSaved: (v: boolean) => void
-  }
-}
-
-// ============================================================
-// localStorage 缓存 key
-// ============================================================
-
-function lsKey(id: string) { return `project-${id}` }
-function charKey(id: string) { return `ai-gal-characters-${id}` }
-function comboKey(id: string) { return `ai-gal-combos-${id}` }
-
-// ============================================================
-// 从 localStorage 恢复
-// ============================================================
-
-function loadFromCache(id: string): {
-  project: ProjectData | null
-  characters: Character[]
-  combos: Record<string, SavedCombo[]>
-} {
-  try {
-    const proj = JSON.parse(localStorage.getItem(lsKey(id)) || 'null')
-    const chars = JSON.parse(localStorage.getItem(charKey(id)) || 'null')
-    const combos = JSON.parse(localStorage.getItem(comboKey(id)) || 'null')
-    return { project: proj, characters: chars || [], combos: combos || {} }
-  } catch {
-    return { project: null, characters: [], combos: {} }
-  }
-}
-
-/** 如果项目章节为空，自动生成骨架结构 */
-function ensureChapters(project: ProjectData): ProjectData {
-  if (project.chapters.length > 0) {
-    const main = project.chapters.filter(c => !c.endingType).sort((a, b) => a.number - b.number)
-    const endings = project.chapters.filter(c => c.endingType)
-    return { ...project, chapters: [...main, ...endings] }
-  }
-  const chapters = generateChapterSkeleton(project.narrativeStructure, project.chapterCount)
-  return { ...project, chapters }
-}
+import { putProject, getProject as idbGetProject } from './indexeddb-cache'
 
 // ============================================================
 // Store
 // ============================================================
+
+type SyncStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+
+interface ProjectStore {
+  projectId: string | null
+  project: ProjectData | null
+  characters: Character[]
+  savedCombos: Record<string, SavedCombo[]>
+  version: number
+  syncStatus: SyncStatus
+  loading: boolean
+  showSaved: boolean
+
+  loadProject: (id: string) => Promise<void>
+  saveProject: (updated: ProjectData) => void
+  saveCharacters: (chars: Character[]) => void
+  saveCombos: (combos: Record<string, SavedCombo[]>) => void
+  forceSave: () => Promise<void>
+}
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   projectId: null,
   project: null,
   characters: [],
   savedCombos: {},
+  version: 1,
+  syncStatus: 'idle',
   loading: false,
   showSaved: false,
 
-  actions: {
-    loadProject(id: string) {
-      // 如果已加载同一项目，跳过
-      if (get().projectId === id && get().project) return
+  // ── 加载 ──
+  async loadProject(id: string) {
+    if (get().projectId === id && get().project) return
+    set({ projectId: id, loading: true })
 
-      set({ projectId: id, loading: true })
-
-      // 1. 第一层：从 localStorage 恢复（即时渲染）
-      const cached = loadFromCache(id)
+    // 1. IndexedDB → 即时渲染
+    try {
+      const cached = await idbGetProject(id)
       if (cached.project) {
-        const proj = ensureChapters(cached.project)
-        set({ project: proj, characters: cached.characters, savedCombos: cached.combos, loading: false })
+        set({
+          project: ensureChapters(cached.project),
+          characters: cached.characters || [],
+          savedCombos: cached.combos || {},
+          version: cached.project.version ?? 1,
+          loading: false,
+        })
       }
+    } catch {}
 
-      // 2. 第二层：后台从 API 同步元数据（覆盖 localStorage 的旧值）
-      fetch(`/api/projects/${id}/full`)
-        .then(r => r.json())
-        .then(json => {
-          if (json.success && json.data?.project) {
-            const api = json.data
-            const current = get().project
-            // 合并：API 元数据 + 本地章节/结局内容（API 暂时没有章节数据）
-            const merged: ProjectData = ensureChapters({
-              id: api.project.id,
-              name: api.project.name,
-              emotionStyle: api.project.emotion_style,
-              themeBackground: api.project.theme_background,
-              narrativeStructure: api.project.narrative_structure,
-              synopsis: api.project.synopsis || '',
-              chapterCount: api.project.chapter_count,
-              // 优先用本地已有的章节数据
-              chapters: current?.chapters?.length ? current.chapters : (api.chapters || []),
-              endings: current?.endings?.length ? current.endings : (api.endings || []),
-            })
-            set({ project: merged, loading: false })
-            // 同步到 localStorage
-            localStorage.setItem(lsKey(id), JSON.stringify(merged))
-          } else if (!cached.project) {
-            set({ loading: false })
-          }
+    // 2. API → 后台刷新
+    try {
+      const res = await fetch(`/api/projects/${id}/full`)
+      const json = await res.json()
+      if (json.success && json.data?.project) {
+        const api = json.data
+        const current = get().project
+
+        // API version > 本地 → 用 API 数据；否则保留本地
+        const apiVer = api.project.version ?? 1
+        const localVer = current?.version ?? 0
+
+        const project: ProjectData = {
+          id: api.project.id,
+          name: api.project.name,
+          emotionStyle: api.project.emotion_style,
+          themeBackground: api.project.theme_background,
+          narrativeStructure: api.project.narrative_structure,
+          synopsis: api.project.synopsis || '',
+          chapterCount: api.project.chapter_count,
+          chapters: (apiVer > localVer || !current?.chapters?.length)
+            ? (api.chapters || [])
+            : current.chapters,
+          endings: (apiVer > localVer || !current?.endings?.length)
+            ? (api.endings || [])
+            : (current.endings || []),
+          version: Math.max(apiVer, localVer),
+        }
+        if (api.characters?.length) set({ characters: api.characters })
+
+        set({ project: ensureChapters(project), loading: false, version: project.version })
+        putProject(id, { project, characters: get().characters, savedCombos: get().savedCombos })
+      } else if (!get().project) {
+        set({ loading: false })
+      }
+    } catch {
+      if (!get().project) set({ loading: false })
+    }
+
+    // 3. 最终兜底
+    if (!get().project) {
+      const pid = get().projectId
+      if (pid) {
+        set({
+          project: {
+            id: pid, name: '未命名', emotionStyle: '恋爱喜剧', themeBackground: '校园',
+            narrativeStructure: '分支叙事', synopsis: '', chapterCount: 6,
+            chapters: generateChapterSkeleton('分支叙事', 6), endings: [], version: 1,
+          },
+          loading: false,
         })
-        .catch(() => {
-          if (!cached.project) set({ loading: false })
-        })
-    },
+      }
+    }
+  },
 
-    saveProject(updated: ProjectData) {
-      const id = get().projectId
-      if (!id) return
+  // ── 保存（即时写 IndexedDB, 30s 后写 API）──
+  saveProject(updated: ProjectData) {
+    const id = get().projectId
+    if (!id) return
 
-      // 排序 + 自动编号：主线 1..N，结局按添加顺序，编号 N+1, N+2...
-      const main = updated.chapters.filter(c => !c.endingType).sort((a, b) => a.number - b.number)
-      const endings = updated.chapters.filter(c => c.endingType)
-      const renumberedMain = main.map((ch, i) => ({ ...ch, number: i + 1 }))
-      const renumberedEndings = endings.map((ch, i) => ({ ...ch, number: main.length + i + 1 }))
-      const sorted = { ...updated, chapters: [...renumberedMain, ...renumberedEndings] }
+    const project = renumberChapters(updated)
+    set({ project, syncStatus: 'dirty', showSaved: true })
+    setTimeout(() => set({ showSaved: false }), 2000)
 
-      // 内存
-      set({ project: sorted, showSaved: true })
-      // localStorage
-      localStorage.setItem(lsKey(id), JSON.stringify(sorted))
-      // 后台同步 PG（debounce）
-      scheduleAPISync(id, sorted)
-    },
+    // 立即镜像到 IndexedDB
+    const { characters, savedCombos, version } = get()
+    putProject(id, { project: { ...project, version }, characters, savedCombos })
 
-    saveCharacters(chars: Character[]) {
-      const id = get().projectId
-      if (!id) return
-      set({ characters: chars })
-      localStorage.setItem(charKey(id), JSON.stringify(chars))
-    },
+    // 30s 后同步 server
+    scheduleServerSync(id)
+  },
 
-    saveCombos(combos: Record<string, SavedCombo[]>) {
-      const id = get().projectId
-      if (!id) return
-      set({ savedCombos: combos })
-      localStorage.setItem(comboKey(id), JSON.stringify(combos))
-    },
+  saveCharacters(chars: Character[]) {
+    const id = get().projectId
+    if (!id) return
+    set({ characters: chars, syncStatus: 'dirty' })
+    const { project, savedCombos, version } = get()
+    if (project) putProject(id, { project: { ...project, version }, characters: chars, savedCombos })
+    scheduleServerSync(id)
+  },
 
-    setShowSaved(v: boolean) {
-      set({ showSaved: v })
-    },
+  saveCombos(combos: Record<string, SavedCombo[]>) {
+    const id = get().projectId
+    if (!id) return
+    set({ savedCombos: combos, syncStatus: 'dirty' })
+    const { project, characters, version } = get()
+    if (project) putProject(id, { project: { ...project, version }, characters, savedCombos: combos })
+  },
+
+  // ── Ctrl+S / beforeunload ──
+  async forceSave() {
+    const { projectId, project, characters, version, syncStatus } = get()
+    if (syncStatus === 'saving' || !projectId || !project) return
+    set({ syncStatus: 'saving' })
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/full`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          version,
+          meta: {
+            name: project.name, emotion_style: project.emotionStyle,
+            theme_background: project.themeBackground, narrative_structure: project.narrativeStructure,
+            synopsis: project.synopsis, chapter_count: project.chapterCount,
+          },
+          chapters: project.chapters,
+          endings: project.endings || [],
+          characters,
+        }),
+      })
+      const json = await res.json()
+      if (json.success && json.data?.version) {
+        set({ syncStatus: 'saved', version: json.data.version, showSaved: true })
+        setTimeout(() => set({ showSaved: false }), 2000)
+      } else {
+        set({ syncStatus: 'error' })
+      }
+    } catch {
+      set({ syncStatus: 'error' })
+    }
   },
 }))
 
 // ============================================================
-// API 同步 debounce（避免频繁写 DB）
+// 30s debounce server sync
 // ============================================================
 
-const syncTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const serverTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-function scheduleAPISync(projectId: string, project: ProjectData) {
-  const existing = syncTimers.get(projectId)
+function scheduleServerSync(id: string) {
+  const existing = serverTimers.get(id)
   if (existing) clearTimeout(existing)
+  serverTimers.set(id, setTimeout(() => {
+    serverTimers.delete(id)
+    useProjectStore.getState().forceSave()
+  }, 30000))
+}
 
-  const timer = setTimeout(async () => {
-    syncTimers.delete(projectId)
-    try {
-      await fetch('/api/projects', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: project.id,
-          name: project.name,
-          emotion_style: project.emotionStyle,
-          theme_background: project.themeBackground,
-          narrative_structure: project.narrativeStructure,
-          synopsis: project.synopsis,
-          chapter_count: project.chapterCount,
-        }),
-      })
-    } catch { /* 静默失败 */ }
-  }, 2000) // 2 秒防抖
+// ============================================================
+// 章节排序 + 骨架
+// ============================================================
 
-  syncTimers.set(projectId, timer)
+function renumberChapters(project: ProjectData): ProjectData {
+  const main = project.chapters.filter(c => !c.endingType).sort((a, b) => a.number - b.number)
+  const endings = project.chapters.filter(c => c.endingType)
+  return {
+    ...project,
+    chapters: [
+      ...main.map((ch, i) => ({ ...ch, number: i + 1 })),
+      ...endings.map((ch, i) => ({ ...ch, number: main.length + i + 1 })),
+    ],
+  }
+}
+
+function ensureChapters(project: ProjectData): ProjectData {
+  if (project.chapters.length > 0) return renumberChapters(project)
+  return { ...project, chapters: generateChapterSkeleton(project.narrativeStructure, project.chapterCount) }
+}
+
+// ============================================================
+// Ctrl+S + beforeunload
+// ============================================================
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault()
+      useProjectStore.getState().forceSave()
+    }
+  })
+
+  window.addEventListener('beforeunload', () => {
+    const st = useProjectStore.getState()
+    if (!st.projectId || !st.project || st.syncStatus !== 'dirty') return
+
+    // sendBeacon 发最后一把
+    const payload = JSON.stringify({
+      version: st.version,
+      meta: { name: st.project.name, emotion_style: st.project.emotionStyle, theme_background: st.project.themeBackground, narrative_structure: st.project.narrativeStructure, synopsis: st.project.synopsis, chapter_count: st.project.chapterCount },
+      chapters: st.project.chapters,
+      endings: st.project.endings || [],
+      characters: st.characters,
+    })
+    try { navigator.sendBeacon(`/api/projects/${st.projectId}/full`, new Blob([payload], { type: 'application/json' })) } catch {}
+  })
 }

@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { BookOpen } from 'lucide-react'
 import { useProject } from '@/app/editor/_components/project-provider'
-import { toChineseNumber, generateMockSubSections } from '@/app/editor/_lib/utils'
+import { toChineseNumber } from '@/app/editor/_lib/utils'
 import type { SubSection } from '@/app/editor/_lib/types'
 import { ChapterSidebar } from '@/app/editor/_components/chapter/chapter-sidebar'
 import { ChapterOverview, SubSectionEditor } from '@/app/editor/_components/chapter/chapter-overview'
@@ -14,21 +14,33 @@ export default function ChapterPage() {
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(
     project?.chapters && project.chapters.length > 0 ? project.chapters[0].id : null
   )
-  const [subSections, setSubSections] = useState<SubSection[]>([])
   const [expandedSubSection, setExpandedSubSection] = useState<string | null>(null)
   const [selectedSubSectionId, setSelectedSubSectionId] = useState<string | null>(null)
   const [collapsedRoutes, setCollapsedRoutes] = useState<Set<string>>(new Set())
   const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(new Set())
 
-  // Pre-generate sub-sections for ALL chapters (for sidebar display)
+  // key_points → 侧边栏小节显示
   const allSubSections = useMemo(() => {
     if (!project) return {} as Record<string, SubSection[]>
     const map: Record<string, SubSection[]> = {}
     project.chapters.forEach(ch => {
-      map[ch.id] = generateMockSubSections(ch)
+      map[ch.id] = (ch.keyPoints || []).map((kp, i) => ({
+        id: kp.id,
+        title: kp.text,
+        background: '',
+        bgm: '',
+        dialogues: [],
+        triggers: [],
+        cgTrigger: undefined as string | undefined,
+        transition: 'cut' as const,
+        isBranch: false,
+        branchFrom: undefined as string | undefined,
+      }))
     })
     return map
-  }, [project])
+  }, [project?.chapters])
+
+  const subSections = selectedChapterId ? (allSubSections[selectedChapterId] || []) : []
 
   const toggleChapter = (chapterId: string) => {
     setCollapsedChapters(prev => {
@@ -58,13 +70,6 @@ export default function ChapterPage() {
     setSelectedChapterId(id)
     setSelectedSubSectionId(null)
   }
-
-  // Sync center panel sub-sections from pre-generated map
-  useEffect(() => {
-    if (selectedChapterId && allSubSections[selectedChapterId]) {
-      setSubSections(allSubSections[selectedChapterId])
-    }
-  }, [selectedChapterId, allSubSections])
 
   if (!project) return null
 
@@ -113,9 +118,7 @@ export default function ChapterPage() {
                 }
               })}
               onBack={() => setSelectedSubSectionId(null)}
-              onUpdate={(updated) => {
-                setSubSections(prev => prev.map(ss => ss.id === updated.id ? updated : ss))
-              }}
+              onUpdate={() => {}}
             />
           ) : (
             <ChapterOverview

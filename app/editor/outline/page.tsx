@@ -120,8 +120,6 @@ export default function OutlinePage() {
       {/* Content */}
       {isGenerating ? (
         <GeneratingSkeleton count={project.chapterCount} />
-      ) : project.chapters.length === 0 ? (
-        <EmptyOutline onGenerate={(desc) => handleGenerateOutline(desc)} />
       ) : isBranching ? (
         <TreeView
           chapters={project.chapters}

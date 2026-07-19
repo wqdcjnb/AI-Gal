@@ -16,7 +16,8 @@ export default function CharactersPage() {
   const { project } = useProject()
   const characters = useProjectStore(s => s.characters)
   const savedCombos = useProjectStore(s => s.savedCombos)
-  const { saveCharacters, saveCombos } = useProjectStore(s => s.actions)
+  const saveCharacters = useProjectStore(s => s.saveCharacters)
+  const saveCombos = useProjectStore(s => s.saveCombos)
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null)
 
   // Editor state
@@ -30,41 +31,9 @@ export default function CharactersPage() {
   const [frameType, setFrameType] = useState<'full' | 'half' | 'bust'>('full')
   const [showEditPanel, setShowEditPanel] = useState(false)
 
-  // 加载角色（首次无数据时用默认角色初始化）
+  // 角色从缓存加载，不做 mock 初始化
   useEffect(() => {
     if (!project) return
-    if (characters.length === 0) {
-      const initialChars: Character[] = [
-        {
-          id: 'c1', name: '桜', color: '#ec4899', personality: '温柔内向', description: '转学生，喜欢文学',
-          sprites: [
-            { id: 's1-1', characterId: 'c1', name: '通常', type: 'base', url: '', tags: ['默认'] },
-            { id: 's1-2', characterId: 'c1', name: '微笑', type: 'expression', url: '', tags: ['开心'] },
-            { id: 's1-3', characterId: 'c1', name: '惊讶', type: 'expression', url: '', tags: ['意外'] },
-            { id: 's1-4', characterId: 'c1', name: '害羞', type: 'expression', url: '', tags: ['脸红'] },
-            { id: 's1-7', characterId: 'c1', name: '制服', type: 'outfit', url: '', tags: ['校服'] },
-            { id: 's1-8', characterId: 'c1', name: '便服', type: 'outfit', url: '', tags: ['私服'] },
-          ]
-        },
-        {
-          id: 'c2', name: '主人公', color: '#3b82f6', personality: '开朗乐观', description: '普通高中生',
-          sprites: [
-            { id: 's2-1', characterId: 'c2', name: '通常', type: 'base', url: '', tags: ['默认'] },
-            { id: 's2-2', characterId: 'c2', name: '微笑', type: 'expression', url: '', tags: ['开心'] },
-          ]
-        },
-        {
-          id: 'c3', name: '雪乃', color: '#8b5cf6', personality: '高冷傲娇', description: '学生会长',
-          sprites: [
-            { id: 's3-1', characterId: 'c3', name: '通常', type: 'base', url: '', tags: ['默认'] },
-            { id: 's3-2', characterId: 'c3', name: '傲娇', type: 'expression', url: '', tags: ['害羞'] },
-            { id: 's3-3', characterId: 'c3', name: '微笑', type: 'expression', url: '', tags: ['温柔'] },
-            { id: 's3-4', characterId: 'c3', name: '制服', type: 'outfit', url: '', tags: ['校服'] },
-          ]
-        },
-      ]
-      saveCharacters(initialChars)
-    }
   }, [project])
 
   useEffect(() => {
@@ -157,7 +126,9 @@ export default function CharactersPage() {
             <button key={char.id} onClick={() => setSelectedCharId(char.id)}
               className={cn("flex items-center gap-2 px-3 py-2 rounded-lg transition-all whitespace-nowrap",
                 selectedCharId === char.id ? "bg-pink-50 border border-pink-200 text-pink-700" : "hover:bg-muted/50 text-muted-foreground hover:text-foreground")}>
-              <div className="flex h-6 w-6 items-center justify-center rounded-full text-white text-xs font-bold" style={{ backgroundColor: char.color }}>{char.name[0]}</div>
+              <div className="flex h-6 w-6 items-center justify-center rounded-full text-white text-xs font-bold overflow-hidden" style={{ backgroundColor: char.color }}>
+                {char.avatar ? <img src={char.avatar} alt="" className="h-full w-full object-cover" /> : char.name[0]}
+              </div>
               <span className="text-sm font-medium">{char.name}</span>
             </button>
           ))}
@@ -173,7 +144,9 @@ export default function CharactersPage() {
           <div className="max-w-5xl mx-auto">
             {/* Character Info Header */}
             <div className="flex items-center gap-4 mb-6 pb-4 border-b">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white text-xl font-bold" style={{ backgroundColor: selectedChar.color }}>{selectedChar.name[0]}</div>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white text-xl font-bold overflow-hidden" style={{ backgroundColor: selectedChar.color }}>
+                {selectedChar.avatar ? <img src={selectedChar.avatar} alt="" className="h-full w-full object-cover" /> : selectedChar.name[0]}
+              </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <h2 className="text-xl font-bold">{selectedChar.name}</h2>
@@ -203,7 +176,7 @@ export default function CharactersPage() {
 
             {/* Edit Panel */}
             {showEditPanel && selectedChar && (
-              <CharEditPanel character={selectedChar} combos={combos}
+              <CharEditPanel character={selectedChar}
                 generatedImages={generatedImages} pickGenerated={pickGenerated}
                 selectedVariant={selectedVariant}
                 onSave={(data) => {

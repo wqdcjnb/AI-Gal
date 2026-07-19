@@ -1,18 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { X, Sparkles, Trash2 } from 'lucide-react'
-import type { Character, SavedCombo } from '@/app/editor/_lib/types'
+import type { Character } from '@/app/editor/_lib/types'
 import { TagSection } from './tag-section'
+import { AvatarCropDialog } from './avatar-crop-dialog'
 
 export function CharEditPanel({
-  character, onSave, onClose, onDelete, combos, onGenerate, generatedImages, pickGenerated, selectedVariant,
+  character, onSave, onClose, onDelete, onGenerate, generatedImages, pickGenerated, selectedVariant,
 }: {
   character: Character
   onSave: (data: Partial<Character>) => void
   onClose: () => void
   onDelete?: () => void
-  combos: SavedCombo[]
   onGenerate?: () => void
   generatedImages: string[]
   pickGenerated: (v: string) => void
@@ -22,8 +22,37 @@ export function CharEditPanel({
   const [appearance, setAppearance] = useState<string[]>(character.appearance || [])
   const [temperament, setTemperament] = useState<string[]>(character.temperament || [])
   const [extraDesc, setExtraDesc] = useState(character.extraDescription || '')
-  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Crop state
+  const [cropImage, setCropImage] = useState<string | null>(null)
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setCropImage(reader.result as string)
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const handleCropConfirm = async (blob: Blob) => {
+    setUploading(true)
+    setCropImage(null)
+    try {
+      const fd = new FormData()
+      fd.append('cover', blob, 'avatar.png')
+      const res = await fetch('/api/projects/cover', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (json.success) {
+        onSave({ avatar: json.data.cdnUrl })
+      }
+    } catch {} finally {
+      setUploading(false)
+    }
+  }
 
   const defaultAppearance = ['长发', '短发', '黑发', '金发', '蓝瞳', '红瞳', '高挑', '娇小', '校服', '便服', '发夹', '眼镜']
   const defaultTemperament = ['温柔', '高冷', '元气', '傲娇', '神秘', '可爱', '优雅', '帅气', '成熟', '天然']
@@ -33,7 +62,6 @@ export function CharEditPanel({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-5 mx-4" onClick={e => e.stopPropagation()}>
-        {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold">编辑角色信息</h3>
           <div className="flex items-center gap-1">
@@ -62,35 +90,23 @@ export function CharEditPanel({
         )}
 
         <div className="space-y-4">
-          {/* Avatar + AI Section */}
+          {/* Avatar Upload */}
           <div className="flex items-center gap-4 p-3 rounded-lg bg-gradient-to-r from-pink-50 to-violet-50 border border-pink-100">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-white text-2xl font-bold cursor-pointer hover:ring-2 ring-offset-2 ring-pink-300 transition-all"
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleFileSelect} />
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-white text-2xl font-bold cursor-pointer hover:ring-2 ring-offset-2 ring-pink-300 transition-all overflow-hidden"
               style={{ backgroundColor: character.color }}
-              onClick={() => setAvatarPickerOpen(!avatarPickerOpen)}>
-              {character.avatar ? <img src={character.avatar} alt="" className="h-full w-full rounded-full object-cover" /> : character.name[0]}
+              onClick={() => fileInputRef.current?.click()}>
+              {character.avatar ? <img src={character.avatar} alt="" className="h-full w-full object-cover" /> : character.name[0]}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium">AI 生成头像和基础立绘</p>
-              <p className="text-[10px] text-muted-foreground">根据下方外貌、气质自动生成</p>
-              <button onClick={() => onGenerate?.()}
-                className="mt-1.5 flex items-center gap-1 rounded-full bg-white/80 backdrop-blur border border-pink-200/50 px-3 py-1 text-[11px] text-pink-500 hover:bg-pink-50 hover:border-pink-300 hover:shadow-sm transition-all">
-                <Sparkles className="h-3 w-3" />AI 生成
-              </button>
+              <p className="text-xs font-medium">{uploading ? '上传中...' : '上传头像'}</p>
+              <p className="text-[10px] text-muted-foreground">点击头像选择图片，支持裁剪缩放</p>
             </div>
           </div>
-          {avatarPickerOpen && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <button onClick={() => onSave({ avatar: '' })} className="h-12 w-12 shrink-0 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center text-xs text-muted-foreground">
-                <X className="h-3 w-3" />
-              </button>
-              {combos.map(c => (
-                <button key={c.id} onClick={() => { onSave({ avatar: c.spriteId }); setAvatarPickerOpen(false) }}
-                  className="h-12 w-12 shrink-0 rounded-full flex items-center justify-center text-white text-xs font-bold hover:ring-2 ring-pink-300 transition-all"
-                  style={{ backgroundColor: character.color }}>
-                  {character.name[0]}
-                </button>
-              ))}
-            </div>
+
+          {/* Crop Dialog */}
+          {cropImage && (
+            <AvatarCropDialog imageSrc={cropImage} onConfirm={handleCropConfirm} onCancel={() => setCropImage(null)} />
           )}
 
           {/* Generated images strip */}

@@ -31,14 +31,14 @@ export function ChapterCard({
 
   // Color scheme based on route, with optional override
   const colors = cardColors || (isCommonRoute ? ({
-    border: 'border-blue-100',
-    shadow: 'hover:shadow-blue-100/50',
-    numberBg: 'from-blue-100 to-sky-100',
-    numberText: 'text-blue-700',
-    dot: 'bg-blue-300',
-    hoverBg: 'hover:bg-blue-50',
-    buttonText: 'text-blue-500 hover:text-blue-600',
-    focusRing: 'focus:bg-blue-50',
+    border: 'border-indigo-100',
+    shadow: 'hover:shadow-indigo-100/50',
+    numberBg: 'from-indigo-100 to-violet-100',
+    numberText: 'text-indigo-700',
+    dot: 'bg-indigo-300',
+    hoverBg: 'hover:bg-indigo-50',
+    buttonText: 'text-indigo-500 hover:text-indigo-600',
+    focusRing: 'focus:bg-indigo-50',
   }) : ({
     border: 'border-pink-100',
     shadow: 'hover:shadow-pink-100/50',
@@ -101,7 +101,7 @@ export function ChapterCard({
                 value={localSummary}
                 onChange={(e) => setLocalSummary(e.target.value)}
                 rows={2}
-                className={cn("w-full rounded-lg border bg-white px-3 py-2 text-sm text-muted-foreground outline-none focus:ring-2 resize-none", isCommonRoute ? "border-blue-200 focus:ring-blue-100" : "border-pink-200 focus:ring-pink-100")}
+                className={cn("w-full rounded-lg border bg-white px-3 py-2 text-sm text-muted-foreground outline-none focus:ring-2 resize-none", isCommonRoute ? "border-indigo-200 focus:ring-indigo-100" : "border-pink-200 focus:ring-pink-100")}
                 autoFocus
               />
               <div className="flex items-center gap-2">

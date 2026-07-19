@@ -7,7 +7,7 @@ import { toChineseNumber } from '@/app/editor/_lib/utils'
 import type { Chapter, SubSection } from '@/app/editor/_lib/types'
 
 const PALETTE = [
-  { border: 'border-blue-200',   bg: 'bg-blue-50/60',   text: 'text-blue-700',   dot: 'bg-blue-400',   number: 'bg-blue-100 text-blue-700',   numberActive: 'bg-blue-500 text-white' },
+  { border: 'border-indigo-200',   bg: 'bg-indigo-50/60',   text: 'text-indigo-700',   dot: 'bg-indigo-400',   number: 'bg-indigo-100 text-indigo-700',   numberActive: 'bg-indigo-500 text-white' },
   { border: 'border-pink-200',   bg: 'bg-pink-50/60',   text: 'text-pink-700',   dot: 'bg-pink-400',   number: 'bg-pink-100 text-pink-700',   numberActive: 'bg-pink-500 text-white' },
   { border: 'border-violet-200', bg: 'bg-violet-50/60', text: 'text-violet-700', dot: 'bg-violet-400', number: 'bg-violet-100 text-violet-700', numberActive: 'bg-violet-500 text-white' },
   { border: 'border-amber-200',  bg: 'bg-amber-50/60',  text: 'text-amber-700',  dot: 'bg-amber-400',  number: 'bg-amber-100 text-amber-700',  numberActive: 'bg-amber-500 text-white' },
@@ -148,7 +148,7 @@ export function ChapterSidebar({
           <div className="space-y-1">
             {endingChapters.map((chapter, idx) => {
               const isSelected = selectedChapterId === chapter.id
-              const endingConfig = endingLabels[chapter.endingType || 'GE']
+              const endingConfig = endingLabels[chapter.endingType || 'Good End']
               const dispNum = mainChapters.length + idx + 1
               return (
                 <button

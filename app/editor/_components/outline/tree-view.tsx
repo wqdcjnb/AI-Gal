@@ -68,7 +68,14 @@ export function TreeView({
     addRoute: isMultiEnding ? '添加结局' : '添加新路线',
     addRouteDesc: isMultiEnding ? '创建新的不同结局' : '创建新的个人线故事',
     routeNames: {} as Record<string, string>,
-    routeEmojis: isMultiEnding ? { 'Good End': '🌸', 'Normal End': '📘', 'Bad End': '💀', 'True End': '👑' } as Record<string, string> : {} as Record<string, string>,
+    endingEmoji: (() => {
+      const map: Record<string, string> = { 'Good End': '🌸', 'Normal End': '📘', 'Bad End': '💀', 'True End': '👑' }
+      return (routeKey: string) => {
+        const chs = routeGroups.get(routeKey) || []
+        const et = chs[0]?.endingType
+        return et ? map[et] || '🎭' : '🎭'
+      }
+    })(),
   }
 
   return (
@@ -76,19 +83,19 @@ export function TreeView({
       {/* Common Route */}
       {commonChapters.length > 0 && (
         <div>
-          <div className="rounded-lg border border-blue-200 overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-blue-50/50 transition-colors" onClick={() => toggleRoute('common')}>
+          <div className="rounded-lg border border-indigo-200 overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-indigo-50/50 transition-colors" onClick={() => toggleRoute('common')}>
               <div className="flex items-center gap-2">
-                <ChevronDown className={cn("h-3 w-3 text-blue-400 transition-transform", collapsedRoutes.has('common') && "-rotate-90")} />
-                <span className="text-blue-500 text-sm">📖</span>
+                <ChevronDown className={cn("h-3 w-3 text-indigo-400 transition-transform", collapsedRoutes.has('common') && "-rotate-90")} />
+                <span className="text-indigo-500 text-sm">📖</span>
                 <span className="text-sm font-medium text-foreground">{T.commonLabel}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-600">{commonChapters.length} 章</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600">{commonChapters.length} 章</span>
               </div>
             </div>
             {!collapsedRoutes.has('common') && (
               <div className="px-3 pb-3">
-                <div className="mb-3 rounded-lg border-l-4 border-blue-400 bg-blue-50/50 px-4 py-2">
-                  <p className="text-xs text-blue-700"><span className="font-medium">{T.commonLabel}</span> — {T.commonDesc}</p>
+                <div className="mb-3 rounded-lg border-l-4 border-indigo-400 bg-indigo-50/50 px-4 py-2">
+                  <p className="text-xs text-indigo-700"><span className="font-medium">{T.commonLabel}</span> — {T.commonDesc}</p>
                 </div>
                 <div className="space-y-2">
                   {commonChapters.map((chapter, idx) => (
@@ -96,7 +103,7 @@ export function TreeView({
                   ))}
                 </div>
                 {onAddChapter && (
-                  <Button variant="ghost" size="sm" className="w-full mt-2 text-blue-600 hover:bg-blue-50 h-7 text-xs" onClick={() => onAddChapter('common')}>
+                  <Button variant="ghost" size="sm" className="w-full mt-2 text-indigo-600 hover:bg-indigo-50 h-7 text-xs" onClick={() => onAddChapter('common')}>
                     <Plus className="h-3 w-3 mr-1" />{T.addCommon}
                   </Button>
                 )}
@@ -135,8 +142,8 @@ export function TreeView({
               <div className={cn("flex items-center justify-between px-3 py-2 cursor-pointer transition-colors", rc.bg)} onClick={() => toggleRoute(key)}>
                 <div className="flex items-center gap-2">
                   <ChevronDown className={cn("h-3 w-3 transition-transform", rc.text, collapsedRoutes.has(key) && "-rotate-90")} />
-                  {isMultiEnding && T.routeEmojis[key] ? (
-                    <span className="text-sm">{T.routeEmojis[key]}</span>
+                  {isMultiEnding ? (
+                    <span className="text-sm">{T.endingEmoji(key) || '🎭'}</span>
                   ) : (
                     <Heart className={cn("h-4 w-4", rc.text)} fill="currentColor" />
                   )}
@@ -168,7 +175,10 @@ export function TreeView({
                     ))}
                   </div>
                   {onAddChapter && (
-                    <Button variant="ghost" size="sm" className={cn("w-full mt-2 h-7 text-xs", rc.text)} onClick={() => onAddChapter(key)}>
+                    <Button variant="ghost" size="sm" className={cn("w-full mt-2 h-7 text-xs", rc.text)} onClick={() => {
+                      const et = chs[0]?.endingType
+                      onAddChapter(key, et)
+                    }}>
                       <Plus className="h-3 w-3 mr-1" />添加章节
                     </Button>
                   )}

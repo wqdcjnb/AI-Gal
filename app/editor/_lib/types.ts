@@ -28,6 +28,7 @@ export interface ProjectData {
   chapterCount: number
   chapters: Chapter[]
   endings?: Ending[]
+  version?: number
 }
 
 // ── Choice option ──
@@ -179,7 +180,7 @@ export interface OutlineTabProps {
   project: ProjectData
   isGenerating: boolean
   onGenerate: (description?: string) => void
-  onAddChapter: (route?: string) => void
+  onAddChapter: (route?: string, endingType?: string) => void
   onDeleteChapter: (id: string) => void
   onEditChapter: (chapter: Chapter) => void
   onAddKeyPoint: (chapterId: string, keyPointData?: KeyPoint) => void
@@ -209,7 +210,7 @@ export interface TreeViewProps extends ChapterViewProps {
   isBranching: boolean
   isMultiEnding?: boolean
   onAddRoute?: (route: string, chapterCount?: number) => void
-  onAddChapter?: (route?: string) => void
+  onAddChapter?: (route?: string, endingType?: string) => void
   onOpenAddRouteDialog?: () => void
   onEditRoute?: (route: string) => void
 }

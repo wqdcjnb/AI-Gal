@@ -3,8 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import type { ProjectData, Chapter, KeyPoint, Ending } from '@/app/editor/_lib/types'
-import { mockProjects } from '@/lib/mock-projects'
-import { generateMockOutline, generateChapterSkeleton } from '@/app/editor/_lib/utils'
+import { generateMockOutline } from '@/app/editor/_lib/utils'
 import { useProjectStore } from '@/lib/project-store-zustand'
 
 // ── Context API 不变，组件无需改动 ──
@@ -16,7 +15,7 @@ interface ProjectContextType {
   showSaved: boolean
   // Chapter CRUD
   updateChapter: (chapterId: string, updates: Partial<Chapter>) => void
-  addChapter: (route?: string) => void
+  addChapter: (route?: string, endingType?: string) => void
   requestDeleteChapter: (chapterId: string) => void
   confirmDeleteChapter: () => void
   cancelDelete: () => void
@@ -77,9 +76,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   // ── Zustand store（内存 + localStorage） ──
   const storeProject = useProjectStore(s => s.project)
-  const storeLoading = useProjectStore(s => s.loading)
-  const storeShowSaved = useProjectStore(s => s.showSaved)
-  const { loadProject, saveProject: storeSave, setShowSaved } = useProjectStore(s => s.actions)
+  const storeSave = useProjectStore(s => s.saveProject)
+  const loadProject = useProjectStore(s => s.loadProject)
 
   // ── Local UI state ──
   const [isGenerating, setIsGenerating] = useState(false)
@@ -97,62 +95,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [editTitle, setEditTitle] = useState('')
   const [editSummary, setEditSummary] = useState('')
 
-  // ── 加载项目：Zustand store 内部处理 localStorage → API 后台刷新 ──
+  // ── 加载项目 ──
   useEffect(() => {
     if (!projectId) return
     loadProject(projectId)
-
-    // 兜底：如果 localStorage 和 API 都没有，从 mock 生成初始项目
-    const checkAndInit = () => {
-      const st = useProjectStore.getState()
-      if (!st.loading && !st.project) {
-        const mock = mockProjects.find(p => p.id === projectId)
-        const structure = mock?.structure || '分支叙事'
-        const chCount = mock?.chapter_count || 6
-        const chapters = generateChapterSkeleton(structure, chCount)
-        const fallback: ProjectData = {
-          id: projectId,
-          name: mock?.name || '未命名项目',
-          emotionStyle: mock?.style || '恋爱喜剧',
-          themeBackground: mock?.setting || '校园',
-          narrativeStructure: structure,
-          synopsis: mock?.synopsis || '',
-          chapterCount: chCount,
-          chapters,
-          endings: [],
-        }
-        storeSave(fallback)
-      }
-    }
-
-    if (!storeLoading && !storeProject) {
-      checkAndInit()
-    }
   }, [projectId])
-
-  // Re-check when store state changes
-  useEffect(() => {
-    if (!storeLoading && !storeProject && projectId) {
-      const mock = mockProjects.find(p => p.id === projectId)
-      if (mock) {
-        const structure = mock?.structure || '分支敘事'
-        const chapters = generateChapterSkeleton(structure, mock.chapter_count || 6)
-        storeSave({
-          id: projectId, name: mock.name, emotionStyle: mock.style || '恋爱喜剧',
-          themeBackground: mock.setting || '校园', narrativeStructure: structure,
-          synopsis: mock.synopsis || '', chapterCount: mock.chapter_count || 6,
-          chapters, endings: [],
-        })
-      }
-    }
-  }, [storeLoading, storeProject, projectId])
 
   // ── Save ──
   const saveProject = useCallback((updated: ProjectData) => {
     storeSave(updated)
-    setShowSaved(true)
-    setTimeout(() => setShowSaved(false), 2000)
-  }, [storeSave, setShowSaved])
+  }, [storeSave])
 
   // ── Chapter CRUD ──
   const updateChapter = useCallback((chapterId: string, updates: Partial<Chapter>) => {
@@ -162,23 +114,26 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     storeSave({ ...st.project, chapters })
   }, [storeSave])
 
-  const addChapter = useCallback((route?: string) => {
+  const addChapter = useCallback((route?: string, endingType?: string) => {
     const st = useProjectStore.getState()
     if (!st.project) return
+    const isEnding = !!endingType
     const mainChapters = st.project.chapters.filter(c => !c.endingType)
     const endingChapters = st.project.chapters.filter(c => c.endingType)
-    const chCount = mainChapters.length
+    const chCount = isEnding ? endingChapters.length : mainChapters.length
     const newCh: Chapter = {
       id: `ch-${Date.now()}`,
-      number: chCount + 1,
-      title: `第${chCount + 1}章`,
+      number: isEnding ? mainChapters.length + chCount + 1 : chCount + 1,
+      title: isEnding ? (endingType || `结局${chCount + 1}`) : `第${chCount + 1}章`,
       summary: '',
       scenes: [],
       keyPoints: [],
       route: route || 'common',
+      endingType: endingType || undefined,
     }
-    // 主线章节插在结局章节前面
-    storeSave({ ...st.project, chapters: [...mainChapters, newCh, ...endingChapters] })
+    storeSave({ ...st.project, chapters: isEnding
+      ? [...mainChapters, ...endingChapters, newCh]
+      : [...mainChapters, newCh, ...endingChapters] })
   }, [storeSave])
 
   const requestDeleteChapter = useCallback((chapterId: string) => {
@@ -234,15 +189,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       newChapters.push({
         id: `ch-${Date.now()}-${i}`,
         number: mainCount + i + 1,
-        title: `第${mainCount + i + 1}章`,
+        title: endingType || `第${mainCount + i + 1}章`,
         summary: '',
         scenes: [],
         keyPoints: [],
         route,
+        endingType: endingType || undefined,
       })
     }
-    // 插入到主线之后、结局之前
-    storeSave({ ...st.project, chapters: [...mainChapters, ...newChapters, ...endingChapters] })
+    // 追加到现有结局之后
+    storeSave({ ...st.project, chapters: [...mainChapters, ...endingChapters, ...newChapters] })
   }, [storeSave])
 
   // ── Key Point CRUD ──
@@ -399,7 +355,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       project: storeProject,
       projectId,
       saveProject,
-      showSaved: storeShowSaved,
+      get showSaved() { return useProjectStore.getState().showSaved },
       // Chapter
       updateChapter, addChapter, requestDeleteChapter, confirmDeleteChapter, cancelDelete,
       deleteConfirmId, addRoute,

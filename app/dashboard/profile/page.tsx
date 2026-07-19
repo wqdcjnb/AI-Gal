@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AvatarCropDialog } from "@/app/editor/_components/characters/avatar-crop-dialog"
 import {
   UserCircle,
   Camera,
@@ -35,10 +36,8 @@ export default function ProfilePage() {
 
   // ---- 头像编辑状态 ----
   const [avatarUrl, setAvatarUrl] = useState("")           // 已保存的头像 URL
-  const [avatarPreview, setAvatarPreview] = useState("")    // 选图后的本地预览（object URL）
-  const [pendingFile, setPendingFile] = useState<File | null>(null) // 待确认的文件
+  const [cropImage, setCropImage] = useState<string | null>(null) // 裁剪中的图片
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [avatarError, setAvatarError] = useState("")
   const [imgLoadFailed, setImgLoadFailed] = useState(false) // 图片加载失败时的降级
 
   // ---- 密码修改状态 ----
@@ -131,85 +130,37 @@ export default function ProfilePage() {
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
-    // 校验类型
-    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
-      setAvatarError("仅支持 PNG、JPG、WebP、GIF 格式")
-      return
-    }
-    // 校验大小
-    if (file.size > MAX_AVATAR_SIZE) {
-      setAvatarError("图片大小不能超过 5MB")
-      return
-    }
-
-    setAvatarError("")
-    // 显示本地预览，暂存文件等待确认
-    const previewUrl = URL.createObjectURL(file)
-    setAvatarPreview(previewUrl)
-    setPendingFile(file)
-    // 重置 input 以允许重复选择同一文件
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) return
+    if (file.size > MAX_AVATAR_SIZE) return
+    const reader = new FileReader()
+    reader.onload = () => setCropImage(reader.result as string)
+    reader.readAsDataURL(file)
     if (avatarInputRef.current) avatarInputRef.current.value = ""
   }
 
-  // 步骤 2：用户点击确认 → 上传到服务器
-  const handleConfirmAvatar = async () => {
-    if (!pendingFile) return
-    const file = pendingFile
-
+  // 裁剪确认 → 上传 → 自动保存
+  const handleCropConfirm = async (blob: Blob) => {
     setUploadingAvatar(true)
-    setAvatarError("")
     try {
       const formData = new FormData()
-      formData.append("avatar", file)
-
-      const res = await fetch("/api/user/avatar", {
-        method: "POST",
-        body: formData,
-      })
+      formData.append("avatar", blob, "avatar.png")
+      const res = await fetch("/api/user/avatar", { method: "POST", body: formData })
       const data = await res.json()
-
       if (data.success && data.data) {
-        // 上传成功：清除预览状态
-        clearAvatarPreview()
         setImgLoadFailed(false)
-
-        // 从服务端重新拉取用户信息
-        // GET /api/user/profile 内部通过 resolveAvatarUrl 将 fileId 解析为临时 URL
         const profileRes = await fetch("/api/user/profile")
         const profileData = await profileRes.json()
-
-        let resolvedUrl = data.data.avatarUrl // 兜底：上传接口返回的临时 URL
+        let resolvedUrl = data.data.avatarUrl
         if (profileData.success && profileData.data?.avatarUrl) {
           resolvedUrl = profileData.data.avatarUrl
         }
-
-        // 更新本地状态 + AuthContext（保证 Topbar 同步）
         setAvatarUrl(resolvedUrl)
         updateUser({ avatarUrl: resolvedUrl })
-      } else {
-        setAvatarError(data.message || "上传失败")
       }
-    } catch {
-      setAvatarError("网络错误，请稍后重试")
-    } finally {
+    } catch {} finally {
       setUploadingAvatar(false)
+      setCropImage(null)
     }
-  }
-
-  // 步骤 2 取消：放弃预览，恢复旧头像
-  const handleCancelAvatar = () => {
-    setAvatarError("")
-    clearAvatarPreview()
-  }
-
-  // 清理预览状态
-  const clearAvatarPreview = () => {
-    if (avatarPreview && avatarPreview.startsWith("blob:")) {
-      URL.revokeObjectURL(avatarPreview)
-    }
-    setAvatarPreview("")
-    setPendingFile(null)
   }
 
   // ---- 密码修改处理 ----
@@ -327,50 +278,8 @@ export default function ProfilePage() {
           />
 
           {/* 预览确认栏：选图后显示 */}
-          {pendingFile && (
-            <div className="flex items-center gap-3 p-3 rounded-xl border border-purple-500/30 bg-purple-500/5">
-              <img
-                src={avatarPreview}
-                alt="头像预览"
-                className="h-16 w-16 rounded-full object-cover border-2 border-purple-500"
-              />
-              <div className="flex-1">
-                <p className="text-sm font-medium">新头像预览</p>
-                <p className="text-xs text-muted-foreground">
-                  {pendingFile.name} ({(pendingFile.size / 1024).toFixed(1)} KB)
-                </p>
-                {avatarError && (
-                  <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    {avatarError}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleConfirmAvatar}
-                  disabled={uploadingAvatar}
-                  size="sm"
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-none"
-                >
-                  {uploadingAvatar ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  )}
-                  确认
-                </Button>
-                <Button
-                  onClick={handleCancelAvatar}
-                  disabled={uploadingAvatar}
-                  variant="outline"
-                  size="sm"
-                >
-                  <AlertCircle className="h-3.5 w-3.5" />
-                  取消
-                </Button>
-              </div>
-            </div>
+          {cropImage && (
+            <AvatarCropDialog imageSrc={cropImage} onConfirm={handleCropConfirm} onCancel={() => setCropImage(null)} />
           )}
 
           <div className="flex items-center gap-4">
@@ -381,8 +290,7 @@ export default function ProfilePage() {
                 className="relative group cursor-pointer disabled:cursor-wait"
                 title="点击更换头像"
               >
-                {avatarUrl && !avatarPreview && !imgLoadFailed ? (
-                  // 已保存的头像
+                {avatarUrl && !imgLoadFailed ? (
                   <div className="relative">
                     <img
                       key={avatarUrl}
@@ -392,43 +300,14 @@ export default function ProfilePage() {
                       onError={() => setImgLoadFailed(true)}
                     />
                   </div>
-                ) : avatarPreview ? (
-                  // 选图预览中（褪色显示旧头像）
-                  <div className="relative">
-                    <img
-                      src={avatarPreview}
-                      alt="预览"
-                      className="h-20 w-20 rounded-full object-cover border-2 border-purple-500 opacity-70"
-                    />
-                    <div className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center">
-                      <Camera className="h-5 w-5 text-white" />
-                    </div>
-                  </div>
                 ) : (
-                  // 无头像时显示首字母渐变圆圈
                   <div className="h-20 w-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center group-hover:opacity-80 transition-opacity">
                     <span className="text-white text-2xl font-bold">
                       {nickname[0]?.toUpperCase() || "U"}
                     </span>
                   </div>
                 )}
-                {/* 悬浮相机图标 */}
-                {!pendingFile && (
-                  <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                    <Camera className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
-                  </div>
-                )}
               </button>
-              {/* 底部小相机按钮 */}
-              {!pendingFile && (
-                <button
-                  onClick={() => avatarInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-background border border-border flex items-center justify-center hover:bg-accent transition-colors shadow-sm"
-                  title="更换头像"
-                >
-                  <Camera className="h-3.5 w-3.5" />
-                </button>
-              )}
             </div>
             <div>
               {loadingProfile ? (
@@ -437,10 +316,10 @@ export default function ProfilePage() {
                 <>
                   <p className="font-medium">{nickname}</p>
                   <p className="text-sm text-muted-foreground">{user?.email}</p>
-                  {avatarError && (
+                  {null && (
                     <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
                       <AlertCircle className="h-3 w-3" />
-                      {avatarError}
+                      {null}
                     </p>
                   )}
                 </>
