@@ -3,7 +3,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import type { ProjectData, Chapter, KeyPoint, Ending } from '@/app/editor/_lib/types'
-import { generateMockOutline } from '@/app/editor/_lib/utils'
 import { useProjectStore } from '@/lib/project-store-zustand'
 
 // ── Context API 不变，组件无需改动 ──
@@ -77,6 +76,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   // ── Zustand store（内存 + localStorage） ──
   const storeProject = useProjectStore(s => s.project)
   const storeSave = useProjectStore(s => s.saveProject)
+  const storeShowSaved = useProjectStore(s => s.showSaved)
   const loadProject = useProjectStore(s => s.loadProject)
 
   // ── Local UI state ──
@@ -308,16 +308,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── AI Generate ──
-  const handleGenerateOutline = useCallback(async (description?: string, _requirements?: string) => {
-    const st = useProjectStore.getState()
-    if (!st.project) return
-    setIsGenerating(true)
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    const chapters = generateMockOutline(st.project.name, st.project.narrativeStructure, st.project.chapterCount, description)
-    const sorted = [...chapters].sort((a, b) => a.number - b.number)
-    storeSave({ ...st.project, chapters: sorted })
-    setIsGenerating(false)
-  }, [storeSave])
+  const handleGenerateOutline = useCallback(async (_description?: string, _requirements?: string) => {
+    // no-op: 章节骨架已自动生成
+  }, [])
 
   const handleAIGenerateKeyPoint = useCallback((_keyPointId: string) => {
     setIsGeneratingKeyPoint(true)
@@ -355,7 +348,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       project: storeProject,
       projectId,
       saveProject,
-      get showSaved() { return useProjectStore.getState().showSaved },
+      showSaved: storeShowSaved,
       // Chapter
       updateChapter, addChapter, requestDeleteChapter, confirmDeleteChapter, cancelDelete,
       deleteConfirmId, addRoute,

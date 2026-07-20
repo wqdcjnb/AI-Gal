@@ -2,14 +2,14 @@
 
 import { useState } from 'react'
 import { Settings, HelpCircle, Mic, X, Plus, ChevronDown, Trash2, GripVertical } from 'lucide-react'
-import { mockCharacters, mockAssets } from '@/app/editor/_lib/mock-data'
 import type { DialogueCardProps } from '@/app/editor/_lib/types'
 
-const bgmOptions = mockAssets.filter(a => a.category === 'bgm')
-const seOptions = mockAssets.filter(a => a.category === 'se')
-const cgOptions = mockAssets.filter(a => a.category === 'cg')
-const voiceOptions = mockAssets.filter(a => a.category === 'voice')
-const bgOptions = mockAssets.filter(a => a.category === 'background')
+const _defaultChars = [{ id: '', name: '未选择', color: '#888', sprites: [] }]
+const bgmOptions: any[] = []
+const seOptions: any[] = []
+const cgOptions: any[] = []
+const voiceOptions: any[] = []
+const bgOptions: any[] = []
 
 const voiceEmotions = ['默认', '开心', '悲伤', '愤怒', '惊讶', '害羞', '紧张', '温柔', '冷淡']
 
@@ -107,7 +107,7 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
   }
 
   // ── Character Dialogue ──
-  const char = mockCharacters.find(c => c.id === dialogue.characterId)
+  const char = _defaultChars.find(c => c.id === dialogue.characterId)
   const charSprites = char?.sprites || []
 
   return (
@@ -228,8 +228,8 @@ function NarrationEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogu
 
 // ── Dialogue Edit Panel ──
 function DialogueEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any; onUpdate?: any; onClose: () => void; onDelete?: () => void }) {
-  const char = mockCharacters.find(c => c.id === dialogue.characterId)
-  const [charId, setCharId] = useState(dialogue.characterId || mockCharacters[0]?.id || '')
+  const char = _defaultChars.find(c => c.id === dialogue.characterId)
+  const [charId, setCharId] = useState(dialogue.characterId || _defaultChars[0]?.id || '')
   const [charName, setCharName] = useState(dialogue.characterName || char?.name || '')
   const [content, setContent] = useState(dialogue.content || '')
   return (
@@ -241,8 +241,8 @@ function DialogueEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue
         </div>
         <label className="text-[10px] text-muted-foreground mb-1 block">角色</label>
         <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3"
-          value={charId} onChange={e => { setCharId(e.target.value); setCharName(mockCharacters.find(c => c.id === e.target.value)?.name || '') }}>
-          {mockCharacters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          value={charId} onChange={e => { setCharId(e.target.value); setCharName(_defaultChars.find(c => c.id === e.target.value)?.name || '') }}>
+          {_defaultChars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <label className="text-[10px] text-muted-foreground mb-1 block">对话内容</label>
         <textarea value={content} onChange={e => setContent(e.target.value)}

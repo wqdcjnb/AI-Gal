@@ -91,10 +91,14 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             : (current.endings || []),
           version: Math.max(apiVer, localVer),
         }
-        if (api.characters?.length) set({ characters: api.characters })
+        if (api.characters?.length) set({ characters: api.characters.map((c: any) => ({ ...c, sprites: c.sprites || [] })) })
+        // 只在 API 有数据时才覆盖，避免空数据清掉本地
+        if (api.sprite_combos && Object.keys(api.sprite_combos).length > 0) {
+          set({ savedCombos: api.sprite_combos })
+        }
 
         set({ project: ensureChapters(project), loading: false, version: project.version })
-        putProject(id, { project, characters: get().characters, savedCombos: get().savedCombos })
+        putProject(id, { project, characters: get().characters, savedCombos: get().savedCombos || api.sprite_combos || {} })
       } else if (!get().project) {
         set({ loading: false })
       }
@@ -141,7 +145,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set({ characters: chars, syncStatus: 'dirty' })
     const { project, savedCombos, version } = get()
     if (project) putProject(id, { project: { ...project, version }, characters: chars, savedCombos })
-    scheduleServerSync(id)
+    // 立即同步角色到服务器
+    fetch(`/api/projects/${id}/full`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characters: chars }),
+    }).catch(() => {})
   },
 
   saveCombos(combos: Record<string, SavedCombo[]>) {
@@ -150,11 +159,17 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set({ savedCombos: combos, syncStatus: 'dirty' })
     const { project, characters, version } = get()
     if (project) putProject(id, { project: { ...project, version }, characters, savedCombos: combos })
+    // 立即同步到服务器
+    fetch(`/api/projects/${id}/full`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sprite_combos: combos }),
+    }).catch(() => {})
   },
 
   // ── Ctrl+S / beforeunload ──
   async forceSave() {
-    const { projectId, project, characters, version, syncStatus } = get()
+    const { projectId, project, characters, savedCombos, version, syncStatus } = get()
     if (syncStatus === 'saving' || !projectId || !project) return
     set({ syncStatus: 'saving' })
 
@@ -172,6 +187,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           chapters: project.chapters,
           endings: project.endings || [],
           characters,
+          sprite_combos: savedCombos,
         }),
       })
       const json = await res.json()
@@ -246,6 +262,7 @@ if (typeof window !== 'undefined') {
       chapters: st.project.chapters,
       endings: st.project.endings || [],
       characters: st.characters,
+      sprite_combos: st.savedCombos,
     })
     try { navigator.sendBeacon(`/api/projects/${st.projectId}/full`, new Blob([payload], { type: 'application/json' })) } catch {}
   })

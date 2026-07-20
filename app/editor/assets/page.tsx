@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Plus, Sparkles, Upload, Search, Layers, List, X, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProject } from '@/app/editor/_components/project-provider'
-import { mockAssets } from '@/app/editor/_lib/mock-data'
+const mockAssets: any[] = []
 import { assetCategories, colorMap, placeholderGradients } from '@/app/editor/_lib/constants'
 import type { AssetCategory } from '@/app/editor/_lib/types'
 import { AssetCard } from '@/app/editor/_components/asset/asset-card'

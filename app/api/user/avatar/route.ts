@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer())
     const ext = file.type.split("/")[1] || "png"
-    const cloudPath = `avatars/${uid}_${Date.now()}.${ext}`
+    const cloudPath = `${uid}_${Date.now()}.${ext}`
 
     const result = await uploadToPGStorage({
       cloudPath,

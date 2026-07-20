@@ -7,9 +7,10 @@ import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import {
   getProject, listChapters, listEndings, listKeyPoints,
-  listCharacters,
+  listCharacters, listSpriteCombos, listSprites,
   saveChapters, saveEndings, updateProject,
-  saveSubSections, saveKeyPoints, saveCharacters,
+  saveSubSections, saveKeyPoints, saveCharacters, saveSpriteCombos,
+  saveSprites,
 } from "@/lib/project-store"
 
 const COOKIE_NAME = "cloudbase_token"
@@ -56,6 +57,39 @@ export async function GET(
   // 加载角色
   const { data: charList } = await listCharacters(id)
 
+  // 加载每个角色的 sprites
+  if (charList?.length) {
+    await Promise.all(charList.map(async (ch: any) => {
+      const { data: sprites } = await listSprites(ch.id)
+      ch.sprites = (sprites || []).map((s: any) => ({
+        id: s.id,
+        characterId: s.character_id,
+        name: s.name,
+        type: s.type,
+        frameType: s.frame_type,
+        url: s.url,
+        tags: typeof s.tags === 'string' ? JSON.parse(s.tags || '[]') : (s.tags || []),
+      }))
+    }))
+  }
+
+  // 加载立绘组合（按 character_id 分组）
+  const spriteCombos: Record<string, any[]> = {}
+  if (charList?.length) {
+    await Promise.all(charList.map(async (ch: any) => {
+      const { data: combos } = await listSpriteCombos(ch.id)
+      if (combos?.length) spriteCombos[ch.id] = combos.map((c: any) => ({
+        id: c.id,
+        spriteId: c.sprite_id,
+        expressionId: c.expression_id,
+        outfitId: c.outfit_id,
+        poseId: c.pose_id,
+        name: c.name,
+        url: c.url,
+      }))
+    }))
+  }
+
   return NextResponse.json({
     success: true,
     data: {
@@ -64,10 +98,12 @@ export async function GET(
       endings: endRes.data || [],
       characters: (charList || []).map((c: any) => ({
         ...c,
+        sprites: c.sprites || [],
         appearance: typeof c.appearance === 'string' ? JSON.parse(c.appearance || '[]') : (c.appearance || []),
         temperament: typeof c.temperament === 'string' ? JSON.parse(c.temperament || '[]') : (c.temperament || []),
         extraDescription: c.extra_description,
       })),
+      sprite_combos: spriteCombos,
     },
   })
 }
@@ -110,17 +146,15 @@ export async function PATCH(
       }))
       await saveChapters(id, chapters)
 
-      // 提取 key_points 保存到独立表
+      // 提取 key_points 保存到独立表（先清后插，覆盖旧数据）
       for (const ch of body.chapters) {
-        if (ch.keyPoints?.length) {
-          await saveKeyPoints(ch.id, ch.keyPoints.map((kp: any, i: number) => ({
-            id: kp.id,
-            chapter_id: ch.id,
-            text: kp.text || '',
-            description: kp.description || null,
-            sort_order: i,
-          })))
-        }
+        await saveKeyPoints(ch.id, (ch.keyPoints || []).map((kp: any, i: number) => ({
+          id: kp.id,
+          chapter_id: ch.id,
+          text: kp.text || '',
+          description: kp.description || null,
+          sort_order: i,
+        })))
       }
     }
 
@@ -155,7 +189,25 @@ export async function PATCH(
       await saveEndings(id, body.endings)
     }
 
-    // 保存角色
+    // 保存立绘组合
+    if (body.sprite_combos) {
+      for (const [characterId, combos] of Object.entries(body.sprite_combos)) {
+        if (Array.isArray(combos)) {
+          await saveSpriteCombos(characterId, combos.map((c: any) => ({
+            id: c.id,
+            character_id: characterId,
+            sprite_id: c.spriteId || null,
+            expression_id: c.expressionId || null,
+            outfit_id: c.outfitId || null,
+            pose_id: c.poseId || null,
+            name: c.name || '',
+            url: c.url || null,
+          })))
+        }
+      }
+    }
+
+    // 保存角色 + 立绘
     if (body.characters) {
       const chars = body.characters.map((c: any) => ({
         id: c.id,
@@ -173,6 +225,22 @@ export async function PATCH(
         updated_at: Date.now(),
       }))
       await saveCharacters(id, chars)
+
+      // 提取 sprites 保存到独立表
+      for (const c of body.characters) {
+        if (c.sprites?.length) {
+          await saveSprites(c.id, c.sprites.map((s: any) => ({
+            id: s.id,
+            character_id: c.id,
+            name: s.name || '',
+            type: s.type || 'base',
+            frame_type: s.frameType || null,
+            url: s.url || '',
+            tags: JSON.stringify(s.tags || []),
+            sort_order: 0,
+          })))
+        }
+      }
     }
 
     // 保存元数据

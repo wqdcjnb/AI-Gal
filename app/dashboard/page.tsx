@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus,
@@ -31,14 +31,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  mockProjects,
-  STYLE_LABELS,
-  SETTING_LABELS,
-  STRUCTURE_LABELS,
-  STATUS_CONFIG,
-  type GameProject,
-} from '@/lib/mock-projects';
+import { STYLE_LABELS, SETTING_LABELS, STRUCTURE_LABELS, STATUS_CONFIG, type GameProject } from './dashboard-config';
+
+const mockProjects: GameProject[] = [];
 
 // Cover gradients for projects without cover images - softer for light theme
 const COVER_GRADIENTS = [
@@ -220,7 +215,7 @@ export default function DashboardPage() {
         {projects.length === 0 ? (
           <EmptyState onCreate={() => setCreateOpen(true)} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 justify-items-center">
             {projects.map((project, index) => (
               <ProjectCard
                 key={project.id}
@@ -345,14 +340,22 @@ function ProjectCard({
 
   const updatedDate = new Date(project.updated_at);
   const [timeAgo, setTimeAgo] = useState('');
+  const [tagsOverflow, setTagsOverflow] = useState(false);
+  const tagsRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     setTimeAgo(getTimeAgo(updatedDate));
   }, [updatedDate]);
 
+  useEffect(() => {
+    const el = tagsRef.current?.firstChild as HTMLElement;
+    if (el) setTagsOverflow(el.scrollWidth > el.clientWidth);
+  }, [project.style, project.setting, structureInfo]);
+
   return (
     <div 
       onClick={() => router.push(`/editor?id=${project.id}`)}
-      className="group relative rounded-xl border border-pink-100/60 bg-white overflow-hidden transition-all duration-300 hover:border-pink-200 hover:shadow-lg hover:shadow-pink-100/40 hover:-translate-y-1 cursor-pointer"
+      className="group relative rounded-xl border border-pink-100/60 bg-white overflow-hidden transition-all duration-300 hover:border-pink-200 hover:shadow-lg hover:shadow-pink-100/40 hover:-translate-y-1 cursor-pointer max-w-[320px] w-full"
     >
       {/* Cover Image Area */}
       <div className={`relative aspect-[16/10] bg-gradient-to-br ${gradient} overflow-hidden`}>
@@ -414,43 +417,26 @@ function ProjectCard({
           {project.name}
         </h3>
 
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1.5">
-          {project.style.split(",").filter(Boolean).map((s) => {
-            const info = STYLE_LABELS[s.trim()]
-            return (
-              <Tooltip key={s}>
-                <TooltipTrigger asChild>
-                  <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium border ${info?.color || 'bg-stone-100 text-stone-600 border-stone-200'}`}>
-                    {s.trim()}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="bg-white border-pink-100/60 text-xs shadow-md text-stone-700">
-                  {info?.desc}
-                </TooltipContent>
-              </Tooltip>
-            )
-          })}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium border ${settingInfo?.color || 'bg-stone-100 text-stone-600 border-stone-200'}`}>
-                {project.setting}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="bg-white border-pink-100/60 text-xs shadow-md text-stone-700">
-              {settingInfo?.desc}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium bg-violet-50 text-violet-600 border border-violet-200/60">
-                {structureInfo?.label}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="bg-white border-pink-100/60 text-xs shadow-md text-stone-700">
-              {structureInfo?.desc}
-            </TooltipContent>
-          </Tooltip>
+        {/* Tags — 单行，超出时 hover 自动滚动 */}
+        <div ref={tagsRef} className="overflow-hidden">
+          <div className={`flex gap-1.5 whitespace-nowrap ${tagsOverflow ? 'group-hover:animate-[marquee_6s_linear_infinite]' : ''}`}>
+            {(() => {
+              const tags = [
+                ...project.style.split(",").filter(Boolean).map(s => ({ text: s.trim(), desc: STYLE_LABELS[s.trim()]?.desc, color: STYLE_LABELS[s.trim()]?.color || 'bg-stone-100 text-stone-600 border-stone-200' })),
+                { text: project.setting, desc: settingInfo?.desc, color: settingInfo?.color || 'bg-stone-100 text-stone-600 border-stone-200' },
+                { text: structureInfo?.label || '', desc: structureInfo?.desc, color: 'bg-violet-50 text-violet-600 border-violet-200/60' },
+              ].filter(t => t.text)
+              const renderTags = (dup: boolean) => tags.map((t, i) => (
+                <Tooltip key={dup ? `dup-${i}` : i}>
+                  <TooltipTrigger asChild>
+                    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium border shrink-0 ${t.color}`}>{t.text}</span>
+                  </TooltipTrigger>
+                  {t.desc && <TooltipContent side="top" className="bg-white border-pink-100/60 text-xs shadow-md text-stone-700">{t.desc}</TooltipContent>}
+                </Tooltip>
+              ))
+              return <>{renderTags(false)}{tagsOverflow && renderTags(true)}</>
+            })()}
+          </div>
         </div>
 
         {/* Stats */}

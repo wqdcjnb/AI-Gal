@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { MessageSquare, Quote, User, HelpCircle, Sparkles, Zap, X, Plus } from 'lucide-react'
-import { mockCharacters } from '@/app/editor/_lib/mock-data'
+const _defaultChars = [{ id: '', name: '未选择', color: '#888', sprites: [] }]
 import type { SubSectionCardProps } from '@/app/editor/_lib/types'
 import { DialogueCard } from '@/app/editor/_components/chapter/dialogue-card'
 import { TriggerCard, TriggerPanel } from '@/app/editor/_components/chapter/trigger-card'
@@ -162,8 +162,8 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
 
 // ── Dialogue New Panel ──
 function DialogueNewPanel({ onSave, onClose }: { onSave: (charId: string, charName: string, content: string) => void; onClose: () => void }) {
-  const [charId, setCharId] = useState(mockCharacters[0]?.id || '')
-  const [charName, setCharName] = useState(mockCharacters[0]?.name || '')
+  const [charId, setCharId] = useState(_defaultChars[0]?.id || '')
+  const [charName, setCharName] = useState(_defaultChars[0]?.name || '')
   const [content, setContent] = useState('')
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
@@ -171,8 +171,8 @@ function DialogueNewPanel({ onSave, onClose }: { onSave: (charId: string, charNa
         <h3 className="text-sm font-semibold text-foreground mb-3">新建角色对话</h3>
         <label className="text-[10px] text-muted-foreground mb-1 block">角色</label>
         <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3"
-          value={charId} onChange={e => { setCharId(e.target.value); setCharName(mockCharacters.find(c => c.id === e.target.value)?.name || '') }}>
-          {mockCharacters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          value={charId} onChange={e => { setCharId(e.target.value); setCharName(_defaultChars.find(c => c.id === e.target.value)?.name || '') }}>
+          {_defaultChars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <label className="text-[10px] text-muted-foreground mb-1 block">对话内容</label>
         <textarea value={content} onChange={e => setContent(e.target.value)}

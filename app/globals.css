@@ -217,6 +217,11 @@
   }
 }
 
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 .landing-twinkle {
   animation: twinkle 2s ease-in-out infinite;
 }

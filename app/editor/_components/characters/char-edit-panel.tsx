@@ -43,8 +43,9 @@ export function CharEditPanel({
     setCropImage(null)
     try {
       const fd = new FormData()
-      fd.append('cover', blob, 'avatar.png')
-      const res = await fetch('/api/projects/cover', { method: 'POST', body: fd })
+      fd.append('file', blob, 'avatar.png')
+      fd.append('folder', 'characters')
+      const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
       const json = await res.json()
       if (json.success) {
         onSave({ avatar: json.data.cdnUrl })

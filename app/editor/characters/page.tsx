@@ -51,9 +51,10 @@ export default function CharactersPage() {
   const combos = savedCombos[selectedCharId || ''] || []
 
   const addCharacter = () => {
+    const cid = `c${Date.now()}`
     const newChar: Character = {
-      id: `c${Date.now()}`, name: '新角色', color: '#6b7280', personality: '', description: '',
-      sprites: [{ id: `s-${Date.now()}`, characterId: `c${Date.now()}`, name: '通常', type: 'base', url: '', tags: ['默认'] }],
+      id: cid, name: '新角色', color: '#6b7280', personality: '', description: '',
+      sprites: [{ id: `s-${cid}`, characterId: cid, name: '通常', type: 'base', url: '', tags: ['默认'] }],
     }
     saveCharacters([...characters, newChar])
     setSelectedCharId(newChar.id)
@@ -92,7 +93,7 @@ export default function CharactersPage() {
   const addSpriteOfType = (type: Sprite['type'], name: string) => {
     if (!selectedCharId || !name.trim()) return
     const newSprite: Sprite = { id: `s-${Date.now()}`, characterId: selectedCharId, name: name.trim(), type, url: '', tags: [] }
-    const updatedChars = characters.map(ch => ch.id === selectedCharId ? { ...ch, sprites: [...ch.sprites, newSprite] } : ch)
+    const updatedChars = characters.map(ch => ch.id === selectedCharId ? { ...ch, sprites: [...(ch.sprites || []), newSprite] } : ch)
     saveCharacters(updatedChars)
     if (type === 'base') setEditSpriteId(newSprite.id)
     else if (type === 'expression') setEditExpressionId(newSprite.id)
@@ -106,7 +107,7 @@ export default function CharactersPage() {
     if (editExpressionId === spriteId) setEditExpressionId('')
     if (editOutfitId === spriteId) setEditOutfitId('')
     if (editPoseId === spriteId) setEditPoseId('')
-    const updatedChars = characters.map(ch => ch.id === selectedCharId ? { ...ch, sprites: ch.sprites.filter(s => s.id !== spriteId) } : ch)
+    const updatedChars = characters.map(ch => ch.id === selectedCharId ? { ...ch, sprites: (ch.sprites || []).filter(s => s.id !== spriteId) } : ch)
     saveCharacters(updatedChars)
   }
 
@@ -194,16 +195,21 @@ export default function CharactersPage() {
             <div className="flex gap-6 mb-8">
               <div className="w-48 shrink-0">
                 <div className="h-64 rounded-xl bg-gradient-to-b from-pink-50 to-violet-50 border border-pink-100 flex items-center justify-center overflow-hidden">
-                  {editSpriteId ? (
-                    <div className="flex h-full w-full items-center justify-center text-white text-6xl font-bold" style={{ backgroundColor: selectedChar.color }}>
-                      {selectedChar.name[0]}
-                    </div>
-                  ) : (
-                    <div className="text-center text-muted-foreground">
-                      <ImageIcon className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                      <span className="text-xs">选择基础立绘</span>
-                    </div>
-                  )}
+                  {(() => {
+                    const selectedCombo = combos.find(c => c.id === editSpriteId)
+                    if (selectedCombo?.url) {
+                      return <img src={selectedCombo.url} alt={selectedCombo.name} className="h-full w-full object-contain" />
+                    }
+                    if (editSpriteId) {
+                      return <div className="flex h-full w-full items-center justify-center text-white text-6xl font-bold" style={{ backgroundColor: selectedChar.color }}>{selectedChar.name[0]}</div>
+                    }
+                    return (
+                      <div className="text-center text-muted-foreground">
+                        <ImageIcon className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        <span className="text-xs">选择基础立绘</span>
+                      </div>
+                    )
+                  })()}
                 </div>
                 <div className="flex flex-wrap gap-1 mt-2">
                   {spriteName(editSpriteId) && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">{spriteName(editSpriteId)}</span>}
@@ -215,7 +221,7 @@ export default function CharactersPage() {
 
               <div className="flex-1 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <SimpleSelect label="基础立绘" options={baseSprites} value={editSpriteId} onChange={(v) => { setEditSpriteId(v); setEditExpressionId(''); setEditOutfitId(''); setEditPoseId('') }} />
+                  <SimpleSelect label="基础立绘" options={combos.map(c => ({ id: c.id, name: c.name, characterId: selectedCharId || 'none', type: 'base' as const, url: c.url || '', tags: [] as string[] }))} value={editSpriteId} onChange={(v) => { setEditSpriteId(v); setEditExpressionId(''); setEditOutfitId(''); setEditPoseId('') }} />
                   <SpriteSelect label="表情" options={expressionSprites} value={editExpressionId} onChange={setEditExpressionId} type="expression" onAddSprite={addSpriteOfType} onDeleteSprite={deleteSprite} />
                   <SpriteSelect label="服装" options={outfitSprites} value={editOutfitId} onChange={setEditOutfitId} type="outfit" onAddSprite={addSpriteOfType} onDeleteSprite={deleteSprite} />
                   <SpriteSelect label="动作" options={poseSprites} value={editPoseId} onChange={setEditPoseId} type="pose" onAddSprite={addSpriteOfType} onDeleteSprite={deleteSprite} />
@@ -241,7 +247,7 @@ export default function CharactersPage() {
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <ImageIcon className="h-4 w-4 text-pink-500" />立绘画廊 ({combos.length})
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {combos.map(combo => (
                   <ComboCard key={combo.id} combo={combo} selectedChar={selectedChar}
                     onEdit={() => {
@@ -258,22 +264,26 @@ export default function CharactersPage() {
                     }}
                     spriteName={spriteName} />
                 ))}
-                <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-pink-200 bg-pink-50/30 aspect-[3/4] cursor-pointer hover:border-pink-400 hover:bg-pink-50/60 transition-colors">
+                <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-pink-200 bg-pink-50/30 aspect-[9/16] cursor-pointer hover:border-pink-400 hover:bg-pink-50/60 transition-colors">
                   <Plus className="h-8 w-8 text-pink-400" />
                   <span className="text-xs text-pink-500 font-medium">上传图片</span>
                   <input type="file" accept="image/*" className="hidden"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0]
                       if (!file || !selectedCharId) return
-                      const reader = new FileReader()
-                      reader.onload = () => {
-                        const existing = savedCombos[selectedCharId] || []
-                        let n = 1; while (existing.some(c => c.name === `角色立绘${n}`)) n++
-                        const url = reader.result as string
-                        const combo: SavedCombo = { id: `cmb-${Date.now()}`, spriteId: '', name: `角色立绘${n}`, url }
-                        saveCombos({ ...savedCombos, [selectedCharId]: [...existing, combo] })
-                      }
-                      reader.readAsDataURL(file)
+                      const fd = new FormData()
+                      fd.append('file', file)
+                      fd.append('folder', 'sprites')
+                      try {
+                        const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
+                        const json = await res.json()
+                        if (json.success && json.data?.cdnUrl) {
+                          const existing = savedCombos[selectedCharId] || []
+                          let n = 1; while (existing.some(c => c.name === `角色立绘${n}`)) n++
+                          const combo: SavedCombo = { id: `cmb-${Date.now()}`, spriteId: '', name: `角色立绘${n}`, url: json.data.cdnUrl }
+                          saveCombos({ ...savedCombos, [selectedCharId]: [...existing, combo] })
+                        }
+                      } catch {}
                     }} />
                 </label>
               </div>
