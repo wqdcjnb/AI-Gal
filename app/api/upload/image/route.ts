@@ -7,7 +7,7 @@
 import { parseAccessToken } from "@/lib/auth/token"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { uploadToPGStorage } from "@/lib/pg-storage"
+import { uploadToPGStorage } from "@/lib/storage/pg-storage"
 
 const COOKIE_NAME = "cloudbase_token"
 const MAX_SIZE = 5 * 1024 * 1024

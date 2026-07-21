@@ -2,11 +2,11 @@
  * POST /api/user/avatar — 上传用户头像
  * 图片存入 CloudBase 云存储，数据库存 CDN 永久 URL
  */
-import { uploadToPGStorage } from "@/lib/pg-storage"
+import { uploadToPGStorage } from "@/lib/storage/pg-storage"
 import { parseAccessToken } from "@/lib/auth/token"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { getUser, createUser, updateUser } from "@/lib/user-store"
+import { getUser, createUser, updateUser } from "@/lib/db/user-store"
 
 const COOKIE_NAME = "cloudbase_token"
 const MAX_SIZE = 5 * 1024 * 1024

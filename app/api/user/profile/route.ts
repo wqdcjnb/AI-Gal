@@ -5,7 +5,7 @@
 import { parseAccessToken } from "@/lib/auth/token"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { getUser, createUser, updateUser } from "@/lib/user-store"
+import { getUser, createUser, updateUser } from "@/lib/db/user-store"
 
 const COOKIE_NAME = "cloudbase_token"
 

@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import type { ProjectData, Chapter, KeyPoint, Ending } from '@/app/editor/_lib/types'
-import { useProjectStore } from '@/lib/project-store-zustand'
+import { useProjectStore } from '@/lib/state/project-store-zustand'
 
 // ── Context API 不变，组件无需改动 ──
 

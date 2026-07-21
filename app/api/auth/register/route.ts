@@ -4,7 +4,7 @@
  */
 import { registerUser } from "@/lib/auth/register";
 import { validatePasswordStrength } from "@/lib/auth/validate";
-import { createUser } from "@/lib/user-store";
+import { createUser } from "@/lib/db/user-store";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 

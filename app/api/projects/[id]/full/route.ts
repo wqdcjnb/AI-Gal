@@ -11,7 +11,7 @@ import {
   saveChapters, saveEndings, updateProject,
   saveSubSections, saveKeyPoints, saveCharacters, saveSpriteCombos,
   saveSprites,
-} from "@/lib/project-store"
+} from "@/lib/db/project-store"
 
 const COOKIE_NAME = "cloudbase_token"
 

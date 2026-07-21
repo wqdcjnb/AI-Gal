@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/components/auth-provider'
+import { useAuth } from '@/components/auth/auth-provider'
 import { cn } from '@/lib/utils'
 import { Sparkles, ArrowRight, Heart, CloudRain, Eye } from 'lucide-react'
 

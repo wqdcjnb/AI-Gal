@@ -3,7 +3,7 @@
  *
  * 用 node-sdk uploadFile 上传到 COS，返回 CDN 永久 URL
  */
-import cloudbaseApp from "./cloudbase"
+import cloudbaseApp from "../cloudbase/cloudbase"
 
 /**
  * cloud:// fileID → CDN 永久 URL

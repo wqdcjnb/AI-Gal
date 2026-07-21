@@ -12,7 +12,7 @@ import {
   createProject,
   updateProject,
   deleteProject,
-} from "@/lib/project-store"
+} from "@/lib/db/project-store"
 
 const COOKIE_NAME = "cloudbase_token"
 
