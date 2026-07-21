@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus,
@@ -33,8 +33,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { STYLE_LABELS, SETTING_LABELS, STRUCTURE_LABELS, STATUS_CONFIG, type GameProject } from './dashboard-config';
 
-const mockProjects: GameProject[] = [];
-
 // Cover gradients for projects without cover images - softer for light theme
 const COVER_GRADIENTS = [
   'from-pink-200/60 via-rose-100/40 to-violet-200/60',
@@ -59,87 +57,27 @@ const STYLE_ICONS: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const [projects, setProjects] = useState<GameProject[]>(mockProjects);
+  const [projects, setProjects] = useState<GameProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GameProject | null>(null);
   const [settingsTarget, setSettingsTarget] = useState<GameProject | null>(null);
 
-  // 加载项目：先显示缓存，后台从 API 刷新
+  // 从 API 加载项目
   useEffect(() => {
-    // 1. 先显示缓存的项目（即时渲染）
-    const cached: GameProject[] = []
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key?.startsWith("project-")) {
-        try {
-          const data = JSON.parse(localStorage.getItem(key)!)
-          if (data.id && data.name) {
-            cached.push({
-              id: data.id,
-              name: data.name,
-              style: data.emotionStyle || "恋爱喜剧",
-              setting: data.themeBackground || "校园",
-              structure: data.narrativeStructure || "分支叙事",
-              synopsis: data.synopsis || "",
-              cover_url: null,
-              chapter_count: data.chapterCount || 6,
-              status: "editing",
-              created_at: "",
-              updated_at: "",
-              chapterCount: data.chapterCount || 6,
-              sceneCount: 0,
-              characterCount: 0,
-            })
-          }
-        } catch {}
-      }
-    }
-    if (cached.length > 0) {
-      const cachedIds = new Set(cached.map(p => p.id))
-      const filteredMock = mockProjects.filter(p => !cachedIds.has(p.id))
-      setProjects([...cached, ...filteredMock])
-      setLoading(false)
-    }
-
-    // 2. 后台从 API 刷新最新数据
     fetch("/api/projects")
       .then((r) => r.json())
       .then((json) => {
         if (json.success && json.data?.length > 0) {
           const apiProjects: GameProject[] = json.data.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            style: p.emotion_style,
-            setting: p.theme_background,
-            structure: p.narrative_structure,
-            synopsis: p.synopsis || "",
-            cover_url: p.cover_url,
-            chapter_count: p.chapter_count,
+            id: p.id, name: p.name,
+            style: p.emotion_style, setting: p.theme_background, structure: p.narrative_structure,
+            synopsis: p.synopsis || "", cover_url: p.cover_url, chapter_count: p.chapter_count,
             status: p.status,
-            created_at: new Date(p.created_at).toISOString(),
-            updated_at: new Date(p.updated_at).toISOString(),
-            chapterCount: p.chapter_count,
-            sceneCount: 0,
-            characterCount: 0,
+            created_at: new Date(p.created_at).toISOString(), updated_at: new Date(p.updated_at).toISOString(),
+            chapterCount: p.chapter_count, sceneCount: 0, characterCount: 0,
           }))
-          // 同步到 localStorage
-          for (const p of apiProjects) {
-            const existing = localStorage.getItem(`project-${p.id}`)
-            const editorData = existing ? JSON.parse(existing) : { chapters: [] }
-            editorData.id = p.id
-            editorData.name = p.name
-            editorData.emotionStyle = p.style
-            editorData.themeBackground = p.setting
-            editorData.narrativeStructure = p.structure
-            editorData.synopsis = p.synopsis
-            editorData.chapterCount = p.chapter_count
-            editorData.endings = editorData.endings || []
-            localStorage.setItem(`project-${p.id}`, JSON.stringify(editorData))
-          }
-          const apiIds = new Set(apiProjects.map(p => p.id))
-          const filteredMock = mockProjects.filter(p => !apiIds.has(p.id))
-          setProjects([...apiProjects, ...filteredMock])
+          setProjects(apiProjects)
         }
       })
       .catch(() => {})
@@ -179,12 +117,6 @@ export default function DashboardPage() {
         characterCount: 0,
       }
       setProjects([newProject, ...projects])
-      // 兼容编辑器：编辑器目前仍从 localStorage 读取
-      localStorage.setItem(`project-${json.data.id}`, JSON.stringify({
-        id: json.data.id, name: data.name, emotionStyle: data.style,
-        themeBackground: data.setting, narrativeStructure: data.structure,
-        synopsis: data.synopsis, chapterCount: data.chapterCount, chapters: [],
-      }))
     }
   }
 
@@ -259,9 +191,6 @@ export default function DashboardPage() {
                 onClick={async () => {
                   if (deleteTarget) {
                     await fetch(`/api/projects?id=${deleteTarget.id}`, { method: "DELETE" })
-                    localStorage.removeItem(`project-${deleteTarget.id}`)
-                    localStorage.removeItem(`ai-gal-characters-${deleteTarget.id}`)
-                    localStorage.removeItem(`ai-gal-combos-${deleteTarget.id}`)
                     setProjects(projects.filter(p => p.id !== deleteTarget.id));
                   }
                   setDeleteTarget(null);
@@ -293,16 +222,6 @@ export default function DashboardPage() {
                 cover_url: coverUrl || null,
               }),
             })
-            // 同步到 localStorage（编辑器从 localStorage 读取）
-            const saved = localStorage.getItem(`project-${id}`)
-            if (saved) {
-              const editorData = JSON.parse(saved)
-              editorData.name = data.name
-              editorData.emotionStyle = data.style
-              editorData.themeBackground = data.setting
-              editorData.synopsis = data.synopsis
-              localStorage.setItem(`project-${id}`, JSON.stringify(editorData))
-            }
             setProjects(projects.map(p => {
               if (p.id === id) {
                 return { ...p, name: data.name, style: data.style, setting: data.setting, synopsis: data.synopsis, cover_url: displayUrl, updated_at: new Date().toISOString() }

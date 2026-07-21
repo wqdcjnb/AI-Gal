@@ -9,7 +9,6 @@ import { TimelineView } from '@/app/editor/_components/outline/timeline-view'
 import { TreeView } from '@/app/editor/_components/outline/tree-view'
 import { KeyPointModal } from '@/app/editor/_components/outline/keypoint-modal'
 import { AddRouteDialog } from '@/app/editor/_components/outline/add-route-dialog'
-import { EmptyOutline } from '@/app/editor/_components/outline/empty-outline'
 import { GeneratingSkeleton } from '@/app/editor/_components/outline/generating-skeleton'
 
 export default function OutlinePage() {
@@ -45,6 +44,7 @@ export default function OutlinePage() {
   const [addRouteDialogOpen, setAddRouteDialogOpen] = useState(false)
   const [editRouteDialogOpen, setEditRouteDialogOpen] = useState(false)
   const [editingRoute, setEditingRoute] = useState<string | null>(null)
+  const [editingEndingType, setEditingEndingType] = useState<string | null>(null)
   // Undo state for route and keypoint deletion
   const [undoData, setUndoData] = useState<{ chapters?: Chapter[]; keyPoint?: { chapterId: string; keyPoint: KeyPoint } } | null>(null)
   const [showUndo, setShowUndo] = useState(false)
@@ -128,7 +128,12 @@ export default function OutlinePage() {
           onAddRoute={addRoute}
           onAddChapter={addChapter}
           onOpenAddRouteDialog={() => setAddRouteDialogOpen(true)}
-          onEditRoute={(route) => { setEditingRoute(route); setEditRouteDialogOpen(true) }}
+          onEditRoute={(route) => {
+            const ch = project.chapters.find(c => c.route === route)
+            setEditingRoute(route)
+            setEditingEndingType(ch?.endingType || null)
+            setEditRouteDialogOpen(true)
+          }}
           editingChapterId={editingChapterId}
           editTitle={editTitle}
           editSummary={editSummary}
@@ -215,6 +220,7 @@ export default function OutlinePage() {
         onClose={() => {
           setEditRouteDialogOpen(false)
           setEditingRoute(null)
+          setEditingEndingType(null)
         }}
         onDelete={() => {
           if (editingRoute) {
@@ -232,7 +238,7 @@ export default function OutlinePage() {
           if (routeChapters.length === 0) return undefined
           return {
             routeName: editingRoute,
-            endingType: routeChapters[0]?.endingType || 'Good End',
+            endingType: editingEndingType || routeChapters[0]?.endingType || 'Good End',
             description: routeChapters[0]?.summary || '',
             chapterCount: routeChapters.length,
           }

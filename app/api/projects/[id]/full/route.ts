@@ -45,6 +45,8 @@ export async function GET(
       return {
         ...ch,
         scenes: typeof ch.scenes === 'string' ? JSON.parse(ch.scenes) : (ch.scenes || []),
+        endingType: ch.ending_type,
+        branchFrom: ch.branch_from,
         keyPoints: (kps || []).map((kp: any) => ({
           id: kp.id,
           text: kp.text,

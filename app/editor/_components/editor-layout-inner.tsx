@@ -7,8 +7,8 @@ import { ArrowLeft, Play, Download, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProject } from '@/app/editor/_components/project-provider'
 import { tabs } from '@/app/editor/_lib/constants'
-import { DeleteConfirmationDialogs } from '@/app/editor/_components/delete-confirmation-dialogs'
-import { UndoToasts } from '@/app/editor/_components/undo-toasts'
+import { DeleteConfirmationDialogs } from '@/app/editor/_components/shared/delete-confirmation-dialogs'
+import { UndoToasts } from '@/app/editor/_components/shared/undo-toasts'
 
 export function EditorLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter()
