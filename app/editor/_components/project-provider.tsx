@@ -4,12 +4,14 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import { useSearchParams } from 'next/navigation'
 import type { ProjectData, Chapter, KeyPoint, Ending } from '@/app/editor/_lib/types'
 import { useProjectStore } from '@/lib/state/project-store-zustand'
+import { toChineseNumber } from '@/app/editor/_lib/utils'
 
 // ── Context API 不变，组件无需改动 ──
 
 interface ProjectContextType {
   project: ProjectData | null
   projectId: string
+  projectReady: boolean
   saveProject: (updatedProject: ProjectData) => void
   showSaved: boolean
   // Chapter CRUD
@@ -77,6 +79,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const storeProject = useProjectStore(s => s.project)
   const storeSave = useProjectStore(s => s.saveProject)
   const storeShowSaved = useProjectStore(s => s.showSaved)
+  const storeProjectReady = useProjectStore(s => s.projectReady)
   const loadProject = useProjectStore(s => s.loadProject)
 
   // ── Local UI state ──
@@ -124,16 +127,17 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     const newCh: Chapter = {
       id: `ch-${Date.now()}`,
       number: isEnding ? mainChapters.length + chCount + 1 : chCount + 1,
-      title: isEnding ? (endingType || `结局${chCount + 1}`) : `第${chCount + 1}章`,
+      title: `第${toChineseNumber(isEnding ? mainChapters.length + chCount + 1 : chCount + 1)}章`,
       summary: '',
       scenes: [],
       keyPoints: [],
       route: route || 'common',
       endingType: endingType || undefined,
     }
-    storeSave({ ...st.project, chapters: isEnding
+    const allChapters = isEnding
       ? [...mainChapters, ...endingChapters, newCh]
-      : [...mainChapters, newCh, ...endingChapters] })
+      : [...mainChapters, newCh, ...endingChapters]
+    storeSave({ ...st.project, chapters: allChapters.map((ch, i) => ({ ...ch, number: i + 1 })) })
   }, [storeSave])
 
   const requestDeleteChapter = useCallback((chapterId: string) => {
@@ -184,21 +188,29 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     const mainChapters = st.project.chapters.filter(c => !c.endingType)
     const endingChapters = st.project.chapters.filter(c => c.endingType)
     const mainCount = mainChapters.length
+
+    // 同名路线追加序号：樱花结局 → 樱花结局(2) → 樱花结局(3)
+    let finalRoute = route
+    if (endingType && st.project.chapters.some(c => c.route === route && c.endingType)) {
+      let n = 2; while (st.project.chapters.some(c => c.route === `${route}(${n})` && c.endingType)) n++
+      finalRoute = `${route}(${n})`
+    }
+
     const newChapters: Chapter[] = []
     for (let i = 0; i < count; i++) {
       newChapters.push({
         id: `ch-${Date.now()}-${i}`,
         number: mainCount + i + 1,
-        title: endingType || `第${mainCount + i + 1}章`,
+        title: `第${toChineseNumber(mainCount + i + 1)}章`,
         summary: '',
         scenes: [],
         keyPoints: [],
-        route,
+        route: finalRoute,
         endingType: endingType || undefined,
       })
     }
-    // 追加到现有结局之后
-    storeSave({ ...st.project, chapters: [...mainChapters, ...endingChapters, ...newChapters] })
+    const allChapters = [...mainChapters, ...endingChapters, ...newChapters]
+    storeSave({ ...st.project, chapters: allChapters.map((ch, i) => ({ ...ch, number: i + 1 })) })
   }, [storeSave])
 
   // ── Key Point CRUD ──
@@ -347,6 +359,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     <ProjectContext.Provider value={{
       project: storeProject,
       projectId,
+      projectReady: storeProjectReady,
       saveProject,
       showSaved: storeShowSaved,
       // Chapter

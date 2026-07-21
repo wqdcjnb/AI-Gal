@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { BookOpen } from 'lucide-react'
 import { useProject } from '@/app/editor/_components/project-provider'
+import { useProjectStore } from '@/lib/state/project-store-zustand'
 import { toChineseNumber } from '@/app/editor/_lib/utils'
 import type { SubSection } from '@/app/editor/_lib/types'
 import { ChapterSidebar } from '@/app/editor/_components/chapter/chapter-sidebar'
@@ -10,6 +11,8 @@ import { ChapterOverview, SubSectionEditor } from '@/app/editor/_components/chap
 
 export default function ChapterPage() {
   const { project } = useProject()
+  const storeSubSections = useProjectStore(s => s.subSections)
+  const saveSubSections = useProjectStore(s => s.saveSubSections)
 
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(
     project?.chapters && project.chapters.length > 0 ? project.chapters[0].id : null
@@ -19,18 +22,18 @@ export default function ChapterPage() {
   const [collapsedRoutes, setCollapsedRoutes] = useState<Set<string>>(new Set())
   const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(new Set())
 
-  // key_points → 侧边栏小节显示
-  const allSubSections = useMemo(() => {
+  // Skeleton subsections from keyPoints (provides id + title structure)
+  const baseSubSections = useMemo(() => {
     if (!project) return {} as Record<string, SubSection[]>
     const map: Record<string, SubSection[]> = {}
     project.chapters.forEach(ch => {
-      map[ch.id] = (ch.keyPoints || []).map((kp, i) => ({
+      map[ch.id] = (ch.keyPoints || []).map((kp) => ({
         id: kp.id,
         title: kp.text,
         background: '',
         bgm: '',
-        dialogues: [],
-        triggers: [],
+        dialogues: [] as any[],
+        triggers: [] as any[],
         cgTrigger: undefined as string | undefined,
         transition: 'cut' as const,
         isBranch: false,
@@ -40,7 +43,53 @@ export default function ChapterPage() {
     return map
   }, [project?.chapters])
 
-  const subSections = selectedChapterId ? (allSubSections[selectedChapterId] || []) : []
+  // Merge base skeleton + saved data from store → full subsections
+  // 按 ID 匹配，不依赖数组位置顺序
+  const allSubSections = useMemo(() => {
+    const merged: Record<string, SubSection[]> = {}
+    for (const chId of Object.keys(baseSubSections)) {
+      const base = baseSubSections[chId]
+      const saved = storeSubSections[chId]
+      if (!saved || saved.length === 0) {
+        merged[chId] = base
+      } else {
+        // 以 base 为准构建列表，从 saved 中按 id 查找对应的对话数据
+        const savedMap = new Map(saved.map(s => [s.id, s]))
+        merged[chId] = base.map(bs => {
+          const ss = savedMap.get(bs.id)
+          return ss ? {
+            ...bs,
+            dialogues: ss.dialogues || [],
+            triggers: ss.triggers || [],
+            background: ss.background || bs.background,
+            bgm: ss.bgm || bs.bgm,
+            cgTrigger: ss.cgTrigger ?? bs.cgTrigger,
+            transition: ss.transition || bs.transition,
+          } : bs
+        })
+        // 追加 base 中没有但 saved 中有的小节（如手动添加的）
+        for (const ss of saved) {
+          if (!base.find(bs => bs.id === ss.id)) {
+            merged[chId].push(ss)
+          }
+        }
+      }
+    }
+    return merged
+  }, [baseSubSections, storeSubSections])
+
+  const subSections = selectedChapterId
+    ? (allSubSections[selectedChapterId] || [])
+    : []
+
+  // Update a subsection → writes to Zustand store → IndexedDB (instant) + debounce sync to server
+  const handleUpdateSubSection = useCallback((updated: SubSection) => {
+    const chId = selectedChapterId
+    if (!chId) return
+    const list = allSubSections[chId] || []
+    const updatedList = list.map(ss => ss.id === updated.id ? updated : ss)
+    saveSubSections({ ...storeSubSections, [chId]: updatedList })
+  }, [selectedChapterId, allSubSections, storeSubSections, saveSubSections])
 
   const toggleChapter = (chapterId: string) => {
     setCollapsedChapters(prev => {
@@ -109,6 +158,7 @@ export default function ChapterPage() {
           selectedSubSectionId ? (
             <SubSectionEditor
               subSection={subSections.find(ss => ss.id === selectedSubSectionId)!}
+              chapterId={selectedChapter.id}
               allSubSections={Object.entries(allSubSections).map(([chId, subs]) => {
                 const ch = project?.chapters.find(c => c.id === chId)
                 return {
@@ -118,7 +168,7 @@ export default function ChapterPage() {
                 }
               })}
               onBack={() => setSelectedSubSectionId(null)}
-              onUpdate={() => {}}
+              onUpdate={handleUpdateSubSection}
             />
           ) : (
             <ChapterOverview

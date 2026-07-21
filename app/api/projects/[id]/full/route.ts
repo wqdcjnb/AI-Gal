@@ -7,7 +7,7 @@ import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import {
   getProject, listChapters, listEndings, listKeyPoints,
-  listCharacters, listSpriteCombos, listSprites,
+  listCharacters, listSpriteCombos, listSprites, listSubSections,
   saveChapters, saveEndings, updateProject,
   saveSubSections, saveKeyPoints, saveCharacters, saveSpriteCombos,
   saveSprites,
@@ -92,6 +92,26 @@ export async function GET(
     }))
   }
 
+  // 加载所有小节的对话数据（按 chapter_id 分组）
+  const subSections: Record<string, any[]> = {}
+  await Promise.all(chaptersWithKeyPoints.map(async (ch: any) => {
+    const { data: subs } = await listSubSections(ch.id)
+    if (subs?.length) {
+      subSections[ch.id] = subs.map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        background: s.background,
+        bgm: s.bgm,
+        cgTrigger: s.cg_trigger,
+        transition: s.transition,
+        isBranch: s.is_branch === 1 || s.is_branch === true,
+        branchFrom: s.branch_from,
+        dialogues: typeof s.dialogues === 'string' ? JSON.parse(s.dialogues || '[]') : (s.dialogues || []),
+        triggers: typeof s.triggers === 'string' ? JSON.parse(s.triggers || '[]') : (s.triggers || []),
+      }))
+    }
+  }))
+
   return NextResponse.json({
     success: true,
     data: {
@@ -106,6 +126,7 @@ export async function GET(
         extraDescription: c.extra_description,
       })),
       sprite_combos: spriteCombos,
+      sub_sections: subSections,
     },
   })
 }

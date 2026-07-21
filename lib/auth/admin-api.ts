@@ -2,7 +2,7 @@
  * CloudBase Auth Admin API 内部工具
  * 封装带 admin 签名的 HTTP 请求
  */
-import app from "@/lib/cloudbase";
+import app from "@/lib/cloudbase/cloudbase";
 
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
 const { request: cloudbaseRequest } = require("@cloudbase/node-sdk/dist/utils/tcbopenapicommonrequester");

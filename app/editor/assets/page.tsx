@@ -1,14 +1,39 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Sparkles, Upload, Search, Layers, List, X, FolderOpen } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Upload, Search, Layers, List, FolderOpen, Sparkles, X, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProject } from '@/app/editor/_components/project-provider'
-const mockAssets: any[] = []
 import { assetCategories, colorMap, placeholderGradients } from '@/app/editor/_lib/constants'
-import type { AssetCategory } from '@/app/editor/_lib/types'
+import type { AssetCategory, AssetItem } from '@/app/editor/_lib/types'
 import { AssetCard } from '@/app/editor/_components/asset/asset-card'
 import { AssetListItem } from '@/app/editor/_components/asset/asset-list-item'
+
+const UPLOAD_CONFIGS: Record<string, { accept: string }> = {
+  background: { accept: 'image/png,image/jpeg,image/webp' },
+  cg:        { accept: 'image/png,image/jpeg,image/webp' },
+  bgm:       { accept: 'audio/mpeg,audio/wav,audio/ogg,audio/mp3,audio/flac' },
+  se:        { accept: 'audio/mpeg,audio/wav,audio/ogg,audio/mp3,audio/flac' },
+  voice:     { accept: 'audio/mpeg,audio/wav,audio/ogg,audio/mp3,audio/flac' },
+}
+
+function apiToAsset(row: any): AssetItem {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    url: row.url,
+    tags: Array.isArray(row.tags) ? row.tags : typeof row.tags === 'string' ? JSON.parse(row.tags || '[]') : [],
+    usageCount: 0,
+    usedIn: [],
+    status: row.status || 'uploaded',
+    createdAt: new Date(row.created_at).toISOString(),
+    hasDiff: row.has_diff === 1,
+    diffCount: row.diff_count || 0,
+    plotNode: row.plot_node,
+    plotDescription: row.plot_description,
+  }
+}
 
 export default function AssetsPage() {
   const { project } = useProject()
@@ -16,10 +41,29 @@ export default function AssetsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [isGenerating, setIsGenerating] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [assets, setAssets] = useState<AssetItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  // 从数据库加载素材
+  useEffect(() => {
+    if (!project) return
+    setLoading(true)
+    fetch(`/api/assets?projectId=${project.id}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.success && json.data) {
+          setAssets(json.data.map(apiToAsset))
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [project?.id])
 
   if (!project) return null
 
-  const filteredAssets = mockAssets.filter(asset => {
+  const filteredAssets = assets.filter(asset => {
     if (asset.category !== activeCategory) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
@@ -28,12 +72,44 @@ export default function AssetsPage() {
     return true
   })
 
-  const categoryAssets = mockAssets.filter(a => a.category === activeCategory)
-  const totalUsed = categoryAssets.filter(a => a.usageCount > 0).length
-  const totalGenerated = categoryAssets.filter(a => a.status === 'generated').length
-
+  const categoryAssets = assets.filter(a => a.category === activeCategory)
   const currentCategory = assetCategories.find(c => c.id === activeCategory)!
   const colors = colorMap[currentCategory.color]
+  const uploadCfg = UPLOAD_CONFIGS[activeCategory]
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !project) return
+    setUploading(true)
+    try {
+      // 1. 上传文件到云存储
+      const fd = new FormData()
+      fd.append('file', file)
+      const uploadRes = await fetch(`/api/upload/${activeCategory}`, { method: 'POST', body: fd })
+      const uploadJson = await uploadRes.json()
+      if (!uploadJson.success) return
+
+      // 2. 创建数据库记录
+      const createRes = await fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          name: uploadJson.data.name || file.name.replace(/\.[^.]+$/, ''),
+          category: activeCategory,
+          url: uploadJson.data.cdnUrl,
+          tags: [],
+        }),
+      })
+      const createJson = await createRes.json()
+      if (createJson.success) {
+        // 3. 添加到本地列表
+        setAssets(prev => [apiToAsset(createJson.data), ...prev])
+      }
+    } catch {}
+    setUploading(false)
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   return (
     <div className="mx-auto max-w-[1600px] px-6 py-6">
@@ -45,22 +121,13 @@ export default function AssetsPage() {
             管理游戏所需的所有素材资源 — 背景、CG、BGM、音效、语音
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsGenerating(true)}
-            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:shadow-md transition-all"
-          >
-            <Sparkles className="h-4 w-4" />
-            AI 批量生成
-          </button>
-        </div>
       </div>
 
       {/* Category Tabs */}
       <div className="mb-6 flex items-center gap-2 border-b border-border pb-0">
         {assetCategories.map(cat => {
-          const catAssets = mockAssets.filter(a => a.category === cat.id)
-          const catUsed = catAssets.filter(a => a.usageCount > 0).length
+          const catAssets = assets.filter((a: AssetItem) => a.category === cat.id)
+          const catUsed = catAssets.filter((a: AssetItem) => a.usageCount > 0).length
           const Icon = cat.icon
           const isActive = activeCategory === cat.id
           const catColors = colorMap[cat.color]
@@ -93,23 +160,13 @@ export default function AssetsPage() {
         })}
       </div>
 
-      {/* Category Stats & Controls */}
+      {/* Controls */}
       <div className="mb-5 flex items-center gap-4">
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-1.5">
             <div className={cn('h-2 w-2 rounded-full', colors.light)} />
             <span className="text-muted-foreground">总计</span>
             <span className="font-medium text-foreground">{categoryAssets.length}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-green-400" />
-            <span className="text-muted-foreground">已生成</span>
-            <span className="font-medium text-foreground">{totalGenerated}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-blue-400" />
-            <span className="text-muted-foreground">已使用</span>
-            <span className="font-medium text-foreground">{totalUsed}</span>
           </div>
         </div>
         <div className="flex-1" />
@@ -139,7 +196,6 @@ export default function AssetsPage() {
             <List className="h-4 w-4" />
           </button>
         </div>
-        {/* Generate & Upload */}
         <button
           onClick={() => setIsGenerating(true)}
           className={cn('flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors', colors.border, colors.text, `hover:${colors.bg}`)}
@@ -147,10 +203,12 @@ export default function AssetsPage() {
           <Sparkles className="h-4 w-4" />
           AI 生成{currentCategory.label}
         </button>
-        <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-          <Upload className="h-4 w-4" />
-          上传
+        <button onClick={() => fileRef.current?.click()} disabled={uploading}
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          {uploading ? '上传中...' : '上传'}
         </button>
+        <input ref={fileRef} type="file" accept={uploadCfg.accept} onChange={handleFileChange} className="hidden" />
       </div>
 
       {/* Asset Grid/List */}
@@ -166,17 +224,15 @@ export default function AssetsPage() {
                 gradient={placeholderGradients[activeCategory]}
               />
             ))}
-            {/* Add new asset card */}
-            <button
-              onClick={() => setIsGenerating(true)}
-              className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-pink-200 bg-pink-50/30 p-4 min-h-[180px] hover:border-pink-300 hover:bg-pink-50/60 transition-colors"
+            {/* 添加上传卡片 */}
+            <label
+              className="flex items-center justify-center rounded-xl border-2 border-dashed border-pink-200 bg-pink-50/30 aspect-[16/10] cursor-pointer hover:border-pink-400 hover:bg-pink-50/60 transition-colors"
             >
-              <div className={cn('flex h-10 w-10 items-center justify-center rounded-full', colors.light)}>
-                <Plus className={cn('h-5 w-5', colors.text)} />
-              </div>
-              <span className={cn('text-sm font-medium', colors.text)}>添加{currentCategory.label}</span>
-              <span className="text-xs text-muted-foreground text-center">AI 生成或手动上传</span>
-            </button>
+              <span className="text-xs text-pink-500 font-medium">
+                {uploading ? '上传中...' : `添加${currentCategory.label}`}
+              </span>
+              <input type="file" accept={uploadCfg.accept} onChange={handleFileChange} className="hidden" />
+            </label>
           </div>
         ) : (
           <div className="rounded-xl border border-border overflow-hidden">
@@ -200,18 +256,9 @@ export default function AssetsPage() {
           <h3 className="text-lg font-medium text-foreground mb-2">
             {searchQuery ? '没有找到匹配的素材' : `还没有${currentCategory.label}素材`}
           </h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            {searchQuery ? '尝试其他关键词搜索' : '点击「AI 生成」或「上传」开始添加素材'}
+          <p className="text-sm text-muted-foreground">
+            {searchQuery ? '尝试其他关键词搜索' : '点击上方「上传」按钮添加素材'}
           </p>
-          {!searchQuery && (
-            <button
-              onClick={() => setIsGenerating(true)}
-              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 px-4 py-2 text-sm font-medium text-white"
-            >
-              <Sparkles className="h-4 w-4" />
-              AI 生成{currentCategory.label}
-            </button>
-          )}
         </div>
       )}
 

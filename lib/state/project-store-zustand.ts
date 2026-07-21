@@ -7,30 +7,35 @@
  *   保存：组件 → Zustand(dirty) → IndexedDB(即时) → 30s → PATCH /full (version 校验)
  */
 import { create } from 'zustand'
-import type { ProjectData, Character, SavedCombo } from '@/app/editor/_lib/types'
-import { generateChapterSkeleton } from '@/app/editor/_lib/utils'
-import { putProject, getProject as idbGetProject } from './indexeddb-cache'
+import type { ProjectData, Character, SavedCombo, SubSection } from '@/app/editor/_lib/types'
+import { generateChapterSkeleton, toChineseNumber } from '@/app/editor/_lib/utils'
+import { putProject, getProject as idbGetProject } from '../cache/indexeddb-cache'
 
 // ============================================================
 // Store
 // ============================================================
 
 type SyncStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+type LoadingStage = 'init' | 'cache' | 'server' | 'ready'
 
 interface ProjectStore {
   projectId: string | null
   project: ProjectData | null
   characters: Character[]
   savedCombos: Record<string, SavedCombo[]>
+  subSections: Record<string, SubSection[]>
   version: number
   syncStatus: SyncStatus
   loading: boolean
+  loadingStage: LoadingStage
+  projectReady: boolean
   showSaved: boolean
 
   loadProject: (id: string) => Promise<void>
   saveProject: (updated: ProjectData) => void
   saveCharacters: (chars: Character[]) => void
   saveCombos: (combos: Record<string, SavedCombo[]>) => void
+  saveSubSections: (subs: Record<string, SubSection[]>) => void
   forceSave: () => Promise<void>
 }
 
@@ -39,15 +44,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   project: null,
   characters: [],
   savedCombos: {},
+  subSections: {},
   version: 1,
   syncStatus: 'idle',
   loading: false,
+  loadingStage: 'init' as LoadingStage,
+  projectReady: false,
   showSaved: false,
 
   // ── 加载 ──
   async loadProject(id: string) {
-    if (get().projectId === id && get().project) return
-    set({ projectId: id, loading: true })
+    if (get().projectId === id && get().project && get().projectReady) return
+    set({ projectId: id, loading: true, loadingStage: 'init', projectReady: false, subSections: {} })
 
     // 1. IndexedDB → 即时渲染
     try {
@@ -57,13 +65,17 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           project: ensureChapters(cached.project),
           characters: cached.characters || [],
           savedCombos: cached.combos || {},
+          subSections: cached.subSections || {},
           version: cached.project.version ?? 1,
           loading: false,
+          loadingStage: 'cache',
+          projectReady: true,
         })
       }
     } catch {}
 
     // 2. API → 后台刷新
+    set({ loadingStage: 'server' })
     try {
       const res = await fetch(`/api/projects/${id}/full`)
       const json = await res.json()
@@ -96,9 +108,24 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         if (api.sprite_combos && Object.keys(api.sprite_combos).length > 0) {
           set({ savedCombos: api.sprite_combos })
         }
+        // 合并 API 小节数据到本地（保留本地比 API 新的数据）
+        if (api.sub_sections) {
+          const merged = { ...get().subSections }
+          for (const [chId, subs] of Object.entries(api.sub_sections)) {
+            if (Array.isArray(subs) && subs.length > 0) {
+              // 按 id 建立索引，只更新 API 返回的小节，保留本地独有的
+              const localMap = new Map((merged[chId] || []).map((s: any) => [s.id, s]))
+              for (const apiSub of subs) {
+                localMap.set(apiSub.id, { ...(localMap.get(apiSub.id) || {}), ...apiSub })
+              }
+              merged[chId] = Array.from(localMap.values())
+            }
+          }
+          set({ subSections: merged })
+        }
 
-        set({ project: ensureChapters(project), loading: false, version: project.version })
-        putProject(id, { project, characters: get().characters, savedCombos: get().savedCombos || api.sprite_combos || {} })
+        set({ project: ensureChapters(project), loading: false, loadingStage: 'ready', version: project.version, projectReady: true })
+        putProject(id, { project, characters: get().characters, savedCombos: get().savedCombos || api.sprite_combos || {}, subSections: get().subSections || api.sub_sections || {} })
       } else if (!get().project) {
         set({ loading: false })
       }
@@ -117,8 +144,13 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             chapters: generateChapterSkeleton('分支叙事', 6), endings: [], version: 1,
           },
           loading: false,
+          loadingStage: 'ready' as LoadingStage,
+          projectReady: true,
         })
       }
+    } else {
+      // 已有数据（从 IndexedDB 或 API），确保 projectReady
+      set({ loadingStage: 'ready' as LoadingStage, projectReady: true })
     }
   },
 
@@ -132,8 +164,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     setTimeout(() => set({ showSaved: false }), 2000)
 
     // 立即镜像到 IndexedDB
-    const { characters, savedCombos, version } = get()
-    putProject(id, { project: { ...project, version }, characters, savedCombos })
+    const { characters, savedCombos, subSections, version } = get()
+    putProject(id, { project: { ...project, version }, characters, savedCombos, subSections })
 
     // 30s 后同步 server
     scheduleServerSync(id)
@@ -143,8 +175,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const id = get().projectId
     if (!id) return
     set({ characters: chars, syncStatus: 'dirty' })
-    const { project, savedCombos, version } = get()
-    if (project) putProject(id, { project: { ...project, version }, characters: chars, savedCombos })
+    const { project, savedCombos, subSections, version } = get()
+    if (project) putProject(id, { project: { ...project, version }, characters: chars, savedCombos, subSections })
     // 立即同步角色到服务器
     fetch(`/api/projects/${id}/full`, {
       method: 'PATCH',
@@ -157,8 +189,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const id = get().projectId
     if (!id) return
     set({ savedCombos: combos, syncStatus: 'dirty' })
-    const { project, characters, version } = get()
-    if (project) putProject(id, { project: { ...project, version }, characters, savedCombos: combos })
+    const { project, characters, subSections, version } = get()
+    if (project) putProject(id, { project: { ...project, version }, characters, savedCombos: combos, subSections })
     // 立即同步到服务器
     fetch(`/api/projects/${id}/full`, {
       method: 'PATCH',
@@ -167,11 +199,41 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }).catch(() => {})
   },
 
+  async saveSubSections(subs: Record<string, SubSection[]>) {
+    const id = get().projectId
+    if (!id) return
+    // 1. 即时更新 Zustand → UI 立即响应
+    set({ subSections: subs, syncStatus: 'dirty' })
+    const { project, characters, savedCombos, version } = get()
+
+    // 2. 等待 IndexedDB 写入完成 → 防止刷新丢数据
+    if (project) {
+      try { await putProject(id, { project: { ...project, version }, characters, savedCombos, subSections: subs }) } catch (e) { console.error('IndexedDB 写入失败', e) }
+    }
+
+    // 3. 后台同步到服务器
+    const subSectionsArray = Object.entries(subs).flatMap(([chId, ss]) =>
+      ss.map(s => ({ ...s, chapterId: chId }))
+    )
+    fetch(`/api/projects/${id}/full`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: get().version, sub_sections: subSectionsArray }),
+    }).then(r => r.json()).then(j => {
+      if (j.success && j.data?.version) set({ version: j.data.version as number })
+    }).catch(e => { console.error('保存小节失败', e) })
+  },
+
   // ── Ctrl+S / beforeunload ──
   async forceSave() {
-    const { projectId, project, characters, savedCombos, version, syncStatus } = get()
+    const { projectId, project, characters, savedCombos, subSections, version, syncStatus } = get()
     if (syncStatus === 'saving' || !projectId || !project) return
-    set({ syncStatus: 'saving' })
+    set({ syncStatus: 'saving', showSaved: true })
+
+    // 将 subsections map 展开为数组（保留 chapterId）
+    const subSectionsArray = Object.entries(subSections).flatMap(([chId, ss]) =>
+      ss.map(s => ({ ...s, chapterId: chId }))
+    )
 
     try {
       const res = await fetch(`/api/projects/${projectId}/full`, {
@@ -188,6 +250,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           endings: project.endings || [],
           characters,
           sprite_combos: savedCombos,
+          sub_sections: subSectionsArray,
         }),
       })
       const json = await res.json()
@@ -255,6 +318,10 @@ if (typeof window !== 'undefined') {
     const st = useProjectStore.getState()
     if (!st.projectId || !st.project || st.syncStatus !== 'dirty') return
 
+    const subSectionsArray = Object.entries(st.subSections).flatMap(([chId, ss]) =>
+      ss.map(s => ({ ...s, chapterId: chId }))
+    )
+
     // sendBeacon 发最后一把
     const payload = JSON.stringify({
       version: st.version,
@@ -263,6 +330,7 @@ if (typeof window !== 'undefined') {
       endings: st.project.endings || [],
       characters: st.characters,
       sprite_combos: st.savedCombos,
+      sub_sections: subSectionsArray,
     })
     try { navigator.sendBeacon(`/api/projects/${st.projectId}/full`, new Blob([payload], { type: 'application/json' })) } catch {}
   })

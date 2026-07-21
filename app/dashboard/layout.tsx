@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 
 export default function DashboardLayout({
   children,
@@ -19,10 +19,14 @@ export default function DashboardLayout({
     }
   }, [loading, user, router]);
 
+  // ── Auth Gate: 验证登录状态 ──
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="text-center space-y-3">
+          <Sparkles className="h-8 w-8 text-pink-400 mx-auto animate-pulse" />
+          <p className="text-sm text-muted-foreground">正在验证登录...</p>
+        </div>
       </div>
     );
   }

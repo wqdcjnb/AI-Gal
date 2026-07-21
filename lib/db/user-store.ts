@@ -6,7 +6,7 @@
  *
  * 所有函数均为 async
  */
-import { rdb } from "./cloudbase"
+import { rdb } from "../cloudbase/cloudbase"
 
 // ============================================================
 // 类型

@@ -10,7 +10,7 @@ export const tabs = [
 
 // Route labels
 export const routeLabels: Record<string, { label: string; color: string; emoji: string }> = {
-  common: { label: '共通线', color: 'bg-indigo-100 text-indigo-700 border-indigo-200', emoji: '📖' },
+  common: { label: '主线', color: 'bg-indigo-100 text-indigo-700 border-indigo-200', emoji: '📖' },
   a: { label: 'A线', color: 'bg-red-100 text-red-700 border-red-200', emoji: '🎀' },
   b: { label: 'B线', color: 'bg-orange-100 text-orange-700 border-orange-200', emoji: '🎀' },
   c: { label: 'C线', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', emoji: '🎀' },

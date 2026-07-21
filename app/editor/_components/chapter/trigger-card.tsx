@@ -1,13 +1,26 @@
 'use client'
 
 import { useState } from 'react'
-import { Zap, Settings, Plus, X, Trash2 } from 'lucide-react'
+import { Zap, Plus, X, Trash2 } from 'lucide-react'
 import type { Trigger, TriggerCondition } from '@/app/editor/_lib/types'
 import { Cascader } from '@/app/editor/_components/chapter/cascader'
 
+// ── 根据 jumpTarget ID 查找显示名称 ──
+function resolveJumpLabel(targetId: string, tree?: { value: string; label: string; children?: { value: string; label: string }[] }[]): string {
+  if (!tree || !targetId) return targetId || '未设置'
+  for (const ch of tree) {
+    if (ch.children) {
+      const found = ch.children.find(c => c.value === targetId)
+      if (found) return `${ch.label.split(' ')[0]} › ${found.label}`
+    }
+  }
+  return targetId
+}
+
 // ── Trigger Card (display) ──
-export function TriggerCard({ trigger, onEdit }: { trigger: Trigger; onEdit: () => void }) {
+export function TriggerCard({ trigger, onEdit, subSectionTree }: { trigger: Trigger; onEdit: () => void; subSectionTree?: { value: string; label: string; children?: { value: string; label: string }[] }[] }) {
   const choices = trigger.conditions.length
+  const jumpLabel = resolveJumpLabel(trigger.jumpTarget, subSectionTree)
   return (
     <div className="group rounded-lg border-2 border-dashed border-cyan-400/50 bg-cyan-50/20 p-3 hover:border-cyan-400 cursor-pointer"
       onClick={onEdit}>
@@ -17,8 +30,7 @@ export function TriggerCard({ trigger, onEdit }: { trigger: Trigger; onEdit: () 
         <span className="text-sm font-medium text-foreground truncate">{trigger.name || '未命名'}</span>
         <div className="flex-1" />
         <span className="text-[10px] text-muted-foreground">{trigger.logic === 'and' ? '全部满足' : '任一满足'}</span>
-        <span className="text-[10px] text-muted-foreground">→ {trigger.jumpTarget || '未设置'}</span>
-        <Settings className="h-3 w-3 text-muted-foreground" />
+        <span className="text-[10px] text-muted-foreground">→ {jumpLabel}</span>
       </div>
       {choices > 0 && (
         <p className="mt-1 text-[10px] text-muted-foreground pl-7">{choices} 个条件</p>
@@ -50,6 +62,8 @@ export function TriggerPanel({
   const [showDelete, setShowDelete] = useState(false)
 
   const isNew = !trigger
+  const validConditions = conditions.filter(c => c.choiceDialogueId)
+  const canSave = validConditions.length > 0 && !!jumpTarget
 
   const addCondition = () => {
     setConditions([...conditions, { choiceDialogueId: '', optionIndex: 0 }])
@@ -99,10 +113,6 @@ export function TriggerPanel({
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-5 py-2">
-          <label className="text-[10px] text-muted-foreground mb-1 block">名称</label>
-        <input type="text" value={name} onChange={e => setName(e.target.value)}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3"
-          placeholder="触发器名称" />
 
         {/* Logic toggle */}
         <label className="text-[10px] text-muted-foreground mb-1 block">条件逻辑</label>
@@ -155,8 +165,18 @@ export function TriggerPanel({
         {/* Fixed footer */}
         <div className="shrink-0 p-5 pt-2 flex gap-2 border-t border-border">
           <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
-          <button onClick={() => onSave({ id: trigger?.id || `tr-${Date.now()}`, name, conditions, logic, jumpTarget })}
-            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium">保存</button>
+          <button onClick={() => {
+            if (!canSave) return
+            const autoName = validConditions.length > 0
+              ? validConditions.map(c => {
+                  const co = choiceOptions.find(o => o.dialogueId === c.choiceDialogueId)
+                  const opt = co?.options[c.optionIndex]
+                  return `${co?.dialoguePrompt || '?'} → ${opt?.text || '?'}`
+                }).join(logic === 'and' ? ' + ' : ' | ')
+              : '触发器'
+            onSave({ id: trigger?.id || `tr-${Date.now()}`, name: name || autoName, conditions: validConditions, logic, jumpTarget })
+          }} disabled={!canSave}
+            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50">保存</button>
         </div>
       </div>
     </div>

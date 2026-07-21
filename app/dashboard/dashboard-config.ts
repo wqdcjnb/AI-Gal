@@ -48,3 +48,31 @@ export const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   editing:  { label: '编辑中', color: 'text-amber-600 bg-amber-50' },
   complete: { label: '已完成', color: 'text-emerald-600 bg-emerald-50' },
 }
+
+export const COVER_GRADIENTS = [
+  'from-pink-200/60 via-rose-100/40 to-violet-200/60',
+  'from-blue-200/60 via-indigo-100/40 to-purple-200/60',
+  'from-amber-200/60 via-orange-100/40 to-rose-200/60',
+  'from-emerald-200/60 via-teal-100/40 to-cyan-200/60',
+  'from-violet-200/60 via-purple-100/40 to-fuchsia-200/60',
+]
+
+export const STYLE_ICONS: Record<string, string> = {
+  '萌系': '🌸', '泣系': '💧', '郁系': '🌑', '燃系': '🔥',
+  '恋爱喜剧': '💕', '纯爱': '❤️', '剧情向': '📖', '悬疑推理': '🔍',
+  '恐怖猎奇': '👁', '电波系': '📡',
+}
+
+export function getTimeAgo(date: Date): string {
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  if (diffMins < 1) return '刚刚'
+  if (diffMins < 60) return `${diffMins}分钟前`
+  if (diffHours < 24) return `${diffHours}小时前`
+  if (diffDays < 7) return `${diffDays}天前`
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}周前`
+  return date.toLocaleDateString('zh-CN')
+}

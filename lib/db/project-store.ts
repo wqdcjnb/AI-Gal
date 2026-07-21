@@ -6,7 +6,7 @@
  *
  * 所有函数均为 async，返回 { data, error } 结构
  */
-import { rdb } from "./cloudbase"
+import { rdb } from "../cloudbase/cloudbase"
 
 // ============================================================
 // 类型定义
@@ -257,11 +257,21 @@ export async function getSubSection(id: string) {
 }
 
 export async function saveSubSections(chapterId: string, sections: SubSectionRow[]) {
+  // 先删后插，调用方（PATCH /full）保证传入该章节全部小节
   await rdb.from("sub_sections").delete().eq("chapter_id", chapterId)
   if (sections.length > 0) {
     return rdb.from("sub_sections").insert(sections)
   }
   return { data: [], error: null }
+}
+
+/** 安全 upsert 单个小节（不会删除同章节其他小节），供 /api/subsections 使用 */
+export async function upsertSubSection(section: SubSectionRow) {
+  const { data: existing } = await rdb.from("sub_sections").select("id").eq("id", section.id)
+  if (existing && existing.length > 0) {
+    return rdb.from("sub_sections").update(section).eq("id", section.id)
+  }
+  return rdb.from("sub_sections").insert(section)
 }
 
 export async function updateSubSection(id: string, fields: Partial<SubSectionRow>) {

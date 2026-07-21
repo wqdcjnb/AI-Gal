@@ -58,7 +58,7 @@ const STYLE_ICONS: Record<string, string> = {
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<GameProject[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingStage, setLoadingStage] = useState<'fetching' | 'ready'>('fetching');
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GameProject | null>(null);
   const [settingsTarget, setSettingsTarget] = useState<GameProject | null>(null);
@@ -81,7 +81,7 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => setLoadingStage('ready'))
   }, [])
 
   const handleCreateProject = async (data: { name: string; style: string; setting: string; structure: string; chapterCount: number; synopsis: string; coverUrl: string; coverDisplayUrl: string }) => {
@@ -144,7 +144,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Project Grid */}
-        {projects.length === 0 ? (
+        {loadingStage === 'fetching' ? (
+          <ProjectGridSkeleton />
+        ) : projects.length === 0 ? (
           <EmptyState onCreate={() => setCreateOpen(true)} />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 justify-items-center">
@@ -399,6 +401,42 @@ function AddProjectCard({ onClick }: { onClick: () => void }) {
       </span>
     </button>
   );
+}
+
+// ========== Project Grid Skeleton ==========
+function ProjectGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 justify-items-center">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="rounded-xl border border-pink-100/60 bg-white overflow-hidden max-w-[320px] w-full animate-pulse">
+          {/* Cover skeleton */}
+          <div className="aspect-[16/10] bg-gradient-to-br from-pink-100/40 via-rose-50/30 to-violet-100/40" />
+          {/* Content skeleton */}
+          <div className="p-4 space-y-3">
+            <div className="h-5 w-2/3 rounded bg-stone-100" />
+            <div className="flex gap-1.5">
+              <div className="h-5 w-12 rounded-md bg-stone-100" />
+              <div className="h-5 w-16 rounded-md bg-stone-100" />
+              <div className="h-5 w-14 rounded-md bg-stone-100" />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="h-3 w-10 rounded bg-stone-100" />
+              <div className="h-3 w-12 rounded bg-stone-100" />
+              <div className="h-3 w-10 rounded bg-stone-100" />
+            </div>
+            <div className="h-3 w-20 rounded bg-stone-100" />
+          </div>
+        </div>
+      ))}
+      {/* Add card skeleton */}
+      <div className="rounded-xl border-2 border-dashed border-pink-200/60 bg-white/50 aspect-[4/5] flex flex-col items-center justify-center gap-3 max-w-[320px] w-full animate-pulse">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-pink-50 to-violet-50 border border-pink-100">
+          <Plus className="h-5 w-5 text-stone-300" />
+        </div>
+        <div className="h-4 w-16 rounded bg-stone-100" />
+      </div>
+    </div>
+  )
 }
 
 // ========== Empty State ==========

@@ -1,7 +1,7 @@
 /**
  * 用户密码修改
  */
-import app from "@/lib/cloudbase";
+import app from "@/lib/cloudbase/cloudbase";
 import { getAdminToken, authApi } from "./admin-api";
 import { parseAccessToken } from "./token";
 import { sendVerificationCode } from "./verification";

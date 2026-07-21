@@ -2,9 +2,16 @@
 
 import { useState } from 'react'
 import { Settings, HelpCircle, Mic, X, Plus, ChevronDown, Trash2, GripVertical } from 'lucide-react'
-import type { DialogueCardProps } from '@/app/editor/_lib/types'
+import type { DialogueCardProps, Character } from '@/app/editor/_lib/types'
+import { useProjectStore } from '@/lib/state/project-store-zustand'
 
-const _defaultChars = [{ id: '', name: '未选择', color: '#888', sprites: [] }]
+function useCharacterOptions(): Character[] {
+  const characters = useProjectStore(s => s.characters)
+  return [
+    { id: '', name: '未选择', color: '#888', sprites: [] },
+    ...characters,
+  ]
+}
 const bgmOptions: any[] = []
 const seOptions: any[] = []
 const cgOptions: any[] = []
@@ -31,6 +38,7 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
   const [panelOpen, setPanelOpen] = useState(false)
   const [narrationPanelOpen, setNarrationPanelOpen] = useState(false)
   const [dialoguePanelOpen, setDialoguePanelOpen] = useState(false)
+  const charOptions = useCharacterOptions()
 
   const hasSettings = dialogue.spriteExpression || dialogue.bgmChange || dialogue.soundEffect ||
     dialogue.cgTrigger || (dialogue.screenEffect && dialogue.screenEffect !== 'none') ||
@@ -45,7 +53,7 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
           draggable onDragStart={(e) => onDragStart?.(e, index)} onDragOver={onDragOver} onDrop={(e) => onDrop?.(e, index)}>
           <div className="flex items-center gap-2 mb-2">
             <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
-            <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">旁白</span>
+            <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{dialogue.characterName || '旁白'}</span>
             <span className="text-xs text-muted-foreground">#{index + 1}</span>
             <IndicatorBadges dialogue={dialogue} />
             <div className="flex-1" />
@@ -83,7 +91,7 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
           <div className="flex items-center gap-2 cursor-pointer">
             <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
             <HelpCircle className="h-4 w-4 text-amber-600" />
-            <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">选择</span>
+            <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">{dialogue.content || '选择'}</span>
             <span className="text-xs text-muted-foreground">#{index + 1}</span>
             <span className="text-xs text-muted-foreground">({choices.length} 个选项)</span>
             <div className="flex-1" />
@@ -107,8 +115,9 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
   }
 
   // ── Character Dialogue ──
-  const char = _defaultChars.find(c => c.id === dialogue.characterId)
-  const charSprites = char?.sprites || []
+  const char = charOptions.find(c => c.id === dialogue.characterId)
+  const savedCombos = useProjectStore(s => s.savedCombos)
+  const charCombos = (savedCombos[dialogue.characterId || ''] || []) as { id: string; name: string; url?: string }[]
 
   return (
     <>
@@ -118,11 +127,11 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
         <div className="flex items-center gap-2 mb-2">
           <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
           {char && (
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white text-xs font-medium" style={{ backgroundColor: char.color }}>
-              {char.name[0]}
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white text-xs font-medium overflow-hidden" style={{ backgroundColor: char.color }}>
+              {char.avatar ? <img src={char.avatar} alt="" className="h-full w-full object-cover" /> : char.name[0]}
             </div>
           )}
-          <span className="text-sm font-medium" style={{ color: dialogue.characterColor || char?.color || '#666' }}>{dialogue.characterName || '未知角色'}</span>
+          <span className="text-sm font-medium" style={{ color: char?.color || dialogue.characterColor || '#666' }}>{dialogue.characterName || char?.name || '未知角色'}</span>
           <span className="text-xs text-muted-foreground">#{index + 1}</span>
           <IndicatorBadges dialogue={dialogue} />
           <div className="flex-1" />
@@ -139,8 +148,7 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
             <label className="text-xs text-muted-foreground">🎭 立绘</label>
             <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.spriteId || ''}
               onChange={(e) => onUpdate?.({ ...dialogue, spriteId: e.target.value || undefined })}>
-              <option value="">默认</option>
-              {charSprites.map(s => <option key={s.id} value={s.id}>{s.name} ({s.type === 'base' ? '基础' : s.type === 'expression' ? '表情' : s.type === 'outfit' ? '服装' : '动作'})</option>)}
+              {charCombos.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
@@ -205,6 +213,7 @@ function DeleteConfirmButton({ onDelete }: { onDelete: () => void }) {
 
 // ── Narration Edit Panel ──
 function NarrationEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any; onUpdate?: any; onClose: () => void; onDelete?: () => void }) {
+  const [label, setLabel] = useState(dialogue.characterName || '旁白')
   const [content, setContent] = useState(dialogue.content || '')
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
@@ -213,12 +222,17 @@ function NarrationEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogu
           <h3 className="text-sm font-semibold text-foreground">编辑旁白</h3>
           <DeleteConfirmButton onDelete={() => { onDelete?.(); onClose() }} />
         </div>
+        <label className="text-[10px] text-muted-foreground mb-1 block">标签</label>
+        <input type="text" value={label} onChange={e => setLabel(e.target.value)}
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3"
+          placeholder="旁白" />
+        <label className="text-[10px] text-muted-foreground mb-1 block">内容</label>
         <textarea value={content} onChange={e => setContent(e.target.value)}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none mb-4 h-32"
           placeholder="输入旁白内容..." />
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
-          <button onClick={() => { if (!content.trim()) return; onUpdate?.({ ...dialogue, content }); onClose() }}
+          <button onClick={() => { if (!content.trim()) return; onUpdate?.({ ...dialogue, characterName: label || '旁白', content }); onClose() }}
             className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50" disabled={!content.trim()}>保存</button>
         </div>
       </div>
@@ -228,9 +242,11 @@ function NarrationEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogu
 
 // ── Dialogue Edit Panel ──
 function DialogueEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any; onUpdate?: any; onClose: () => void; onDelete?: () => void }) {
-  const char = _defaultChars.find(c => c.id === dialogue.characterId)
-  const [charId, setCharId] = useState(dialogue.characterId || _defaultChars[0]?.id || '')
+  const charOptions = useCharacterOptions()
+  const char = charOptions.find(c => c.id === dialogue.characterId)
+  const [charId, setCharId] = useState(dialogue.characterId || charOptions[0]?.id || '')
   const [charName, setCharName] = useState(dialogue.characterName || char?.name || '')
+  const [charColor, setCharColor] = useState(dialogue.characterColor || char?.color || '#888')
   const [content, setContent] = useState(dialogue.content || '')
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
@@ -241,8 +257,13 @@ function DialogueEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue
         </div>
         <label className="text-[10px] text-muted-foreground mb-1 block">角色</label>
         <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3"
-          value={charId} onChange={e => { setCharId(e.target.value); setCharName(_defaultChars.find(c => c.id === e.target.value)?.name || '') }}>
-          {_defaultChars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          value={charId} onChange={e => {
+            const selected = charOptions.find(c => c.id === e.target.value)
+            setCharId(e.target.value)
+            setCharName(selected?.name || '')
+            setCharColor(selected?.color || '#888')
+          }}>
+          {charOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <label className="text-[10px] text-muted-foreground mb-1 block">对话内容</label>
         <textarea value={content} onChange={e => setContent(e.target.value)}
@@ -250,8 +271,8 @@ function DialogueEditPanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue
           placeholder="输入对话内容..." />
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
-          <button onClick={() => { if (!content.trim()) return; onUpdate?.({ ...dialogue, characterId: charId, characterName: charName, content }); onClose() }}
-            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50" disabled={!content.trim()}>保存</button>
+          <button onClick={() => { if (!content.trim() || !charId) return; onUpdate?.({ ...dialogue, characterId: charId, characterName: charName, characterColor: charColor, content }); onClose() }}
+            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50" disabled={!content.trim() || !charId}>保存</button>
         </div>
       </div>
     </div>
@@ -263,8 +284,12 @@ function ChoicePanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any;
   const [prompt, setPrompt] = useState(dialogue.content || '')
   const [choices, setChoices] = useState((dialogue.choices || []).map((c: any) => ({ text: c.text || '' })))
 
+  const validChoices = choices.filter((c: any) => c.text.trim())
+  const canSave = prompt.trim() && validChoices.length > 0
+
   const save = () => {
-    onUpdate?.({ ...dialogue, content: prompt, choices })
+    if (!canSave) return
+    onUpdate?.({ ...dialogue, content: prompt.trim(), choices: validChoices })
     onClose()
   }
 
@@ -310,7 +335,7 @@ function ChoicePanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any;
         {/* Actions */}
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
-          <button onClick={save} disabled={!prompt.trim()} className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50">保存</button>
+          <button onClick={save} disabled={!canSave} className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50">保存</button>
         </div>
       </div>
     </div>

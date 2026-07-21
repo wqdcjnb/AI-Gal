@@ -2,11 +2,19 @@
 
 import { useState } from 'react'
 import { MessageSquare, Quote, User, HelpCircle, Sparkles, Zap, X, Plus } from 'lucide-react'
-const _defaultChars = [{ id: '', name: '未选择', color: '#888', sprites: [] }]
 import type { SubSectionCardProps } from '@/app/editor/_lib/types'
 import { DialogueCard } from '@/app/editor/_components/chapter/dialogue-card'
 import { TriggerCard, TriggerPanel } from '@/app/editor/_components/chapter/trigger-card'
 import type { Trigger } from '@/app/editor/_lib/types'
+import { useProjectStore } from '@/lib/state/project-store-zustand'
+
+function useCharacterOptions() {
+  const characters = useProjectStore(s => s.characters)
+  return [
+    { id: '', name: '未选择', color: '#888', sprites: [] },
+    ...characters,
+  ]
+}
 
 export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpdate, allSubSections = [], subSectionTree }: SubSectionCardProps) {
   const [showNewChoice, setShowNewChoice] = useState(false)
@@ -59,8 +67,8 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
     )}
     {showNewNarration && (
       <NarrationPanel
-        onSave={(content) => {
-          const newNar = { id: `d-${Date.now()}`, type: 'narration' as const, content }
+        onSave={(label, content) => {
+          const newNar = { id: `d-${Date.now()}`, type: 'narration' as const, characterName: label, content }
           onUpdate?.({ ...subSection, dialogues: [...subSection.dialogues, newNar] })
           setShowNewNarration(false)
         }}
@@ -69,8 +77,8 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
     )}
     {showNewDialogue && (
       <DialogueNewPanel
-        onSave={(charId, charName, content) => {
-          const newDialogue = { id: `d-${Date.now()}`, type: 'dialogue' as const, characterId: charId, characterName: charName, content }
+        onSave={(charId, charName, charColor, content) => {
+          const newDialogue = { id: `d-${Date.now()}`, type: 'dialogue' as const, characterId: charId, characterName: charName, characterColor: charColor, content }
           onUpdate?.({ ...subSection, dialogues: [...subSection.dialogues, newDialogue] })
           setShowNewDialogue(false)
         }}
@@ -127,7 +135,7 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
             ))}
             {/* Trigger cards */}
             {(subSection.triggers || []).map((t) => (
-              <TriggerCard key={t.id} trigger={t} onEdit={() => setEditingTrigger(t)} />
+              <TriggerCard key={t.id} trigger={t} onEdit={() => setEditingTrigger(t)} subSectionTree={subSectionTree} />
             ))}
           </div>
 
@@ -161,9 +169,11 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
 }
 
 // ── Dialogue New Panel ──
-function DialogueNewPanel({ onSave, onClose }: { onSave: (charId: string, charName: string, content: string) => void; onClose: () => void }) {
-  const [charId, setCharId] = useState(_defaultChars[0]?.id || '')
-  const [charName, setCharName] = useState(_defaultChars[0]?.name || '')
+function DialogueNewPanel({ onSave, onClose }: { onSave: (charId: string, charName: string, charColor: string, content: string) => void; onClose: () => void }) {
+  const charOptions = useCharacterOptions()
+  const [charId, setCharId] = useState(charOptions[0]?.id || '')
+  const [charName, setCharName] = useState(charOptions[0]?.name || '')
+  const [charColor, setCharColor] = useState(charOptions[0]?.color || '#888')
   const [content, setContent] = useState('')
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
@@ -171,8 +181,13 @@ function DialogueNewPanel({ onSave, onClose }: { onSave: (charId: string, charNa
         <h3 className="text-sm font-semibold text-foreground mb-3">新建角色对话</h3>
         <label className="text-[10px] text-muted-foreground mb-1 block">角色</label>
         <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3"
-          value={charId} onChange={e => { setCharId(e.target.value); setCharName(_defaultChars.find(c => c.id === e.target.value)?.name || '') }}>
-          {_defaultChars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          value={charId} onChange={e => {
+            const selected = charOptions.find(c => c.id === e.target.value)
+            setCharId(e.target.value)
+            setCharName(selected?.name || '')
+            setCharColor(selected?.color || '#888')
+          }}>
+          {charOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <label className="text-[10px] text-muted-foreground mb-1 block">对话内容</label>
         <textarea value={content} onChange={e => setContent(e.target.value)}
@@ -180,8 +195,8 @@ function DialogueNewPanel({ onSave, onClose }: { onSave: (charId: string, charNa
           placeholder="输入对话内容..." />
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
-          <button onClick={() => { if (content.trim()) { onSave(charId, charName, content); onClose() } }}
-            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50" disabled={!content.trim()}>保存</button>
+          <button onClick={() => { if (content.trim() && charId) { onSave(charId, charName, charColor, content); onClose() } }}
+            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50" disabled={!content.trim() || !charId}>保存</button>
         </div>
       </div>
     </div>
@@ -189,18 +204,24 @@ function DialogueNewPanel({ onSave, onClose }: { onSave: (charId: string, charNa
 }
 
 // ── Narration Panel ──
-function NarrationPanel({ onSave, onClose, initialContent }: { onSave: (content: string) => void; onClose: () => void; initialContent?: string }) {
+function NarrationPanel({ onSave, onClose, initialContent, initialLabel }: { onSave: (label: string, content: string) => void; onClose: () => void; initialContent?: string; initialLabel?: string }) {
+  const [label, setLabel] = useState(initialLabel || '旁白')
   const [content, setContent] = useState(initialContent || '')
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-5 mx-4" onClick={e => e.stopPropagation()}>
         <h3 className="text-sm font-semibold text-foreground mb-3">{initialContent !== undefined ? '编辑旁白' : '新建旁白'}</h3>
+        <label className="text-[10px] text-muted-foreground mb-1 block">标签</label>
+        <input type="text" value={label} onChange={e => setLabel(e.target.value)}
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3"
+          placeholder="旁白" />
+        <label className="text-[10px] text-muted-foreground mb-1 block">内容</label>
         <textarea value={content} onChange={e => setContent(e.target.value)}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none mb-4 h-32"
           placeholder="输入旁白内容..." />
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
-          <button onClick={() => { if (content.trim()) { onSave(content); onClose() } }}
+          <button onClick={() => { if (content.trim()) { onSave(label || '旁白', content); onClose() } }}
             className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50" disabled={!content.trim()}>保存</button>
         </div>
       </div>
@@ -212,6 +233,9 @@ function NarrationPanel({ onSave, onClose, initialContent }: { onSave: (content:
 function NewChoicePanel({ onSave, onClose }: { onSave: (prompt: string, choices: { text: string }[]) => void; onClose: () => void }) {
   const [prompt, setPrompt] = useState('')
   const [choices, setChoices] = useState<{ text: string }[]>([{ text: '' }, { text: '' }])
+
+  const validChoices = choices.filter(c => c.text.trim())
+  const canSave = prompt.trim() && validChoices.length > 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
@@ -242,8 +266,9 @@ function NewChoicePanel({ onSave, onClose }: { onSave: (prompt: string, choices:
         </button>
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
-          <button onClick={() => { onSave(prompt, choices.filter(c => c.text.trim())); onClose() }}
-            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium">保存</button>
+          <button onClick={() => { if (!canSave) return; onSave(prompt.trim(), validChoices); onClose() }}
+            disabled={!canSave}
+            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50">保存</button>
         </div>
       </div>
     </div>

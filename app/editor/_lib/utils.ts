@@ -24,7 +24,7 @@ export const generateChapterSkeleton = (narrativeStructure: string, chapterCount
     chapters.push({
       id: `ch-${now}-${i}`,
       number: i + 1,
-      title: `第${i + 1}章`,
+      title: `第${toChineseNumber(i + 1)}章`,
       summary: '',
       scenes: [],
       keyPoints: [],
