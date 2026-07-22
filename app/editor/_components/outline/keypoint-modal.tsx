@@ -59,7 +59,7 @@ export function KeyPointModal({ isOpen, onClose, keyPoint, chapterTitle, onSave,
               <p className="mt-1 text-xs text-muted-foreground">确定要删除这个小节吗？</p>
               <div className="mt-3 flex gap-2">
                 <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 rounded-lg border py-1.5 text-xs">取消</button>
-                <button onClick={() => { onDelete(keyPoint.id); setShowDeleteConfirm(false); onClose() }} className="flex-1 rounded-lg bg-red-500 py-1.5 text-xs text-white">删除</button>
+                <button onClick={() => { onDelete?.(keyPoint.id); setShowDeleteConfirm(false); onClose() }} className="flex-1 rounded-lg bg-red-500 py-1.5 text-xs text-white">删除</button>
               </div>
             </div>
           </div>
