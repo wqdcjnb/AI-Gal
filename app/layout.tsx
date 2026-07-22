@@ -23,6 +23,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <main className="flex-1">
                 {children}
               </main>
+              <footer className="border-t bg-card py-6">
+                <div className="mx-auto flex flex-wrap items-center justify-center gap-x-6 gap-y-2 px-4 text-sm text-muted-foreground">
+                  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+                    新ICP备2026005748号
+                  </a>
+                  <a href="https://www.beian.gov.cn/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+                    <img src="https://www.beian.gov.cn/img/ghs.png" alt="" className="h-4 w-4 inline-block" />
+                    兵公网安备66080002000195号
+                  </a>
+                </div>
+              </footer>
             </div>
           </AuthProvider>
         </ThemeProvider>
