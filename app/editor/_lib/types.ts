@@ -3,7 +3,6 @@
 export interface KeyPoint {
   id: string
   text: string
-  description?: string // 小节描述/介绍
 }
 
 export interface Chapter {
@@ -11,11 +10,9 @@ export interface Chapter {
   number: number
   title: string
   summary: string
-  scenes: string[]
   keyPoints: KeyPoint[]
   route?: string
   endingType?: string  // "Good End" | "Normal End" | "Bad End" | "True End" 等
-  branchFrom?: string
 }
 
 export interface ProjectData {
@@ -25,9 +22,7 @@ export interface ProjectData {
   themeBackground: string
   narrativeStructure: string
   synopsis: string
-  chapterCount: number
   chapters: Chapter[]
-  endings?: Ending[]
   version?: number
 }
 
@@ -38,7 +33,7 @@ export interface ChoiceOption {
 
 export interface DialogueLine {
   id: string
-  type: 'narration' | 'dialogue' | 'choice'
+  type: 'narration' | 'dialogue' | 'choice' | 'scene'
   characterId?: string
   characterName?: string
   characterColor?: string
@@ -54,11 +49,6 @@ export interface DialogueLine {
   bgmChange?: string
   soundEffect?: string
   cgTrigger?: string
-  screenEffect?: 'none' | 'shake' | 'flash_white' | 'flash_black'
-  transition?: 'cut' | 'fade' | 'dissolve' | 'wipe'
-  // 语音
-  voiceId?: string
-  voiceEmotion?: string
   // For choice type
   choices?: ChoiceOption[]
 }
@@ -81,22 +71,8 @@ export interface Trigger {
 export interface SubSection {
   id: string
   title: string
-  background: string
-  bgm: string
-  cgTrigger?: string
-  transition?: 'cut' | 'fade' | 'dissolve' | 'wipe'
   dialogues: DialogueLine[]
   triggers: Trigger[]
-  isBranch?: boolean
-  branchFrom?: string
-}
-
-// Ending (结局) - for multi-ending mode
-export interface Ending {
-  id: string
-  type: 'GE' | 'NE' | 'BE' | 'TE' // Good/Normal/Bad/True Ending
-  name: string
-  description: string
 }
 
 // Sprite (立绘) - reusable character art asset
@@ -125,23 +101,17 @@ export interface Character {
 
 // ==================== Asset Types ====================
 
-export type AssetCategory = 'background' | 'cg' | 'bgm' | 'se' | 'voice'
+export type AssetCategory = 'background' | 'cg' | 'bgm' | 'se'
 
 export interface AssetItem {
   id: string
   name: string
   category: AssetCategory
   url: string
-  tags: string[]
-  usageCount: number // How many times used in chapters
-  usedIn: string[] // Chapter/scene names where used
-  status: 'generated' | 'uploaded' | 'placeholder'
+  size: number
+  usageCount: number
+  usedIn: string[]
   createdAt: string
-  // CG-specific fields
-  hasDiff?: boolean // Whether this CG has diff versions
-  diffCount?: number // Number of diff versions
-  plotNode?: string // Associated plot node (e.g., "第一章-第2节")
-  plotDescription?: string // Description of the plot moment
 }
 
 // ==================== Component Prop Types ====================
@@ -188,14 +158,8 @@ export interface OutlineTabProps {
   onDeleteKeyPoint: (chapterId: string, keyPointId: string) => void
   onUpdateKeyPointData?: (keyPoint: KeyPoint) => void
   onAddRoute?: (route: string, chapterCount?: number) => void
-  onAddEnding?: (ending: Ending) => void
-  onUpdateEnding?: (id: string, updates: Partial<Ending>) => void
-  onDeleteEnding?: (id: string) => void
-  onUpdateEndingData?: (ending: Ending) => void
   onAIGenerateKeyPoint?: (keyPointId: string) => void
-  onAIGenerateEnding?: (endingId: string) => void
   isGeneratingKeyPoint?: boolean
-  isGeneratingEnding?: boolean
   editingChapterId: string | null
   editTitle: string
   editSummary: string
@@ -223,15 +187,6 @@ export interface KeyPointModalProps {
   onSave: (keyPoint: KeyPoint) => void
   onDelete?: (keyPointId: string) => void
   onAIGenerate?: (keyPointId: string) => void
-  isGenerating?: boolean
-}
-
-export interface EndingModalProps {
-  isOpen: boolean
-  onClose: () => void
-  ending: Ending | null
-  onSave: (ending: Ending) => void
-  onAIGenerate?: (endingId: string) => void
   isGenerating?: boolean
 }
 

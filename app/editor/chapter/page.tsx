@@ -30,14 +30,8 @@ export default function ChapterPage() {
       map[ch.id] = (ch.keyPoints || []).map((kp) => ({
         id: kp.id,
         title: kp.text,
-        background: '',
-        bgm: '',
         dialogues: [] as any[],
         triggers: [] as any[],
-        cgTrigger: undefined as string | undefined,
-        transition: 'cut' as const,
-        isBranch: false,
-        branchFrom: undefined as string | undefined,
       }))
     })
     return map
@@ -61,10 +55,6 @@ export default function ChapterPage() {
             ...bs,
             dialogues: ss.dialogues || [],
             triggers: ss.triggers || [],
-            background: ss.background || bs.background,
-            bgm: ss.bgm || bs.bgm,
-            cgTrigger: ss.cgTrigger ?? bs.cgTrigger,
-            transition: ss.transition || bs.transition,
           } : bs
         })
         // 追加 base 中没有但 saved 中有的小节（如手动添加的）
@@ -159,14 +149,46 @@ export default function ChapterPage() {
             <SubSectionEditor
               subSection={subSections.find(ss => ss.id === selectedSubSectionId)!}
               chapterId={selectedChapter.id}
-              allSubSections={Object.entries(allSubSections).map(([chId, subs]) => {
-                const ch = project?.chapters.find(c => c.id === chId)
-                return {
-                  value: chId,
-                  label: ch ? `第${toChineseNumber(ch.number)}章 ${ch.title}` : chId,
-                  children: subs.map(s => ({ value: s.id, label: s.title })),
+              allSubSections={(() => {
+                const mainChapters = (project?.chapters || []).filter(c => !c.endingType)
+                const endingChapters = (project?.chapters || []).filter(c => c.endingType)
+                const tree: { value: string; label: string; children?: { value: string; label: string; children?: { value: string; label: string }[] }[] }[] = []
+
+                // 主线
+                if (mainChapters.length > 0) {
+                  tree.push({
+                    value: 'main',
+                    label: '主线故事',
+                    children: mainChapters.map(ch => ({
+                      value: ch.id,
+                      label: `第${toChineseNumber(ch.number)}章`,
+                      children: (allSubSections[ch.id] || []).map(s => ({ value: s.id, label: s.title })),
+                    })),
+                  })
                 }
-              })}
+
+                // 结局
+                const endingRoutes = new Map<string, { route: string; chapters: typeof mainChapters; label: string }>()
+                for (const ch of endingChapters) {
+                  const key = ch.route || ch.endingType || '结局'
+                  if (!endingRoutes.has(key)) endingRoutes.set(key, { route: key, chapters: [], label: key })
+                  endingRoutes.get(key)!.chapters.push(ch)
+                }
+                const mainCount = mainChapters.length
+                for (const [, group] of endingRoutes) {
+                  tree.push({
+                    value: group.route,
+                    label: group.label,
+                    children: group.chapters.map((ch, i) => ({
+                      value: ch.id,
+                      label: `第${toChineseNumber(mainCount + i + 1)}章`,
+                      children: (allSubSections[ch.id] || []).map(s => ({ value: s.id, label: s.title })),
+                    })),
+                  })
+                }
+
+                return tree
+              })()}
               onBack={() => setSelectedSubSectionId(null)}
               onUpdate={handleUpdateSubSection}
             />

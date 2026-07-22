@@ -6,9 +6,9 @@ import { parseAccessToken } from "@/lib/auth/token"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import {
-  getProject, listChapters, listEndings, listKeyPoints,
-  listCharacters, listSpriteCombos, listSprites, listSubSections,
-  saveChapters, saveEndings, updateProject,
+  getProject, listChapters, listKeyPoints,
+  listCharacters, listSpriteCombos, listSprites, listSubSections, listAssets,
+  saveChapters, updateProject,
   saveSubSections, saveKeyPoints, saveCharacters, saveSpriteCombos,
   saveSprites,
 } from "@/lib/db/project-store"
@@ -28,10 +28,9 @@ export async function GET(
 
   const { id } = await params
 
-  const [projRes, chRes, endRes] = await Promise.all([
+  const [projRes, chRes] = await Promise.all([
     getProject(id),
     listChapters(id),
-    listEndings(id),
   ])
 
   if (!projRes.data) {
@@ -44,13 +43,10 @@ export async function GET(
       const { data: kps } = await listKeyPoints(ch.id)
       return {
         ...ch,
-        scenes: typeof ch.scenes === 'string' ? JSON.parse(ch.scenes) : (ch.scenes || []),
         endingType: ch.ending_type,
-        branchFrom: ch.branch_from,
         keyPoints: (kps || []).map((kp: any) => ({
           id: kp.id,
           text: kp.text,
-          description: kp.description,
         })),
       }
     })
@@ -100,24 +96,21 @@ export async function GET(
       subSections[ch.id] = subs.map((s: any) => ({
         id: s.id,
         title: s.title,
-        background: s.background,
-        bgm: s.bgm,
-        cgTrigger: s.cg_trigger,
-        transition: s.transition,
-        isBranch: s.is_branch === 1 || s.is_branch === true,
-        branchFrom: s.branch_from,
         dialogues: typeof s.dialogues === 'string' ? JSON.parse(s.dialogues || '[]') : (s.dialogues || []),
         triggers: typeof s.triggers === 'string' ? JSON.parse(s.triggers || '[]') : (s.triggers || []),
       }))
     }
   }))
 
+  // 加载素材
+  const { data: assetList } = await listAssets(id)
+
   return NextResponse.json({
     success: true,
     data: {
       project: projRes.data,
       chapters: chaptersWithKeyPoints,
-      endings: endRes.data || [],
+      assets: assetList || [],
       characters: (charList || []).map((c: any) => ({
         ...c,
         sprites: c.sprites || [],
@@ -159,23 +152,19 @@ export async function PATCH(
         number: ch.number,
         title: ch.title || '',
         summary: ch.summary || '',
-        scenes: JSON.stringify(ch.scenes || []),
         route: ch.route || 'common',
         ending_type: ch.endingType || null,
-        branch_from: ch.branchFrom || null,
-        sort_order: ch.sort_order ?? ch.number,
         created_at: ch.created_at || Date.now(),
         updated_at: Date.now(),
       }))
       await saveChapters(id, chapters)
 
-      // 提取 key_points 保存到独立表（先清后插，覆盖旧数据）
+      // key_points: saveKeyPoints 内部有空数组守卫，不会误删
       for (const ch of body.chapters) {
         await saveKeyPoints(ch.id, (ch.keyPoints || []).map((kp: any, i: number) => ({
           id: kp.id,
           chapter_id: ch.id,
           text: kp.text || '',
-          description: kp.description || null,
           sort_order: i,
         })))
       }
@@ -191,12 +180,6 @@ export async function PATCH(
           id: sub.id,
           chapter_id: cid,
           title: sub.title || '',
-          background: sub.background || '',
-          bgm: sub.bgm || '',
-          cg_trigger: sub.cgTrigger || null,
-          transition: sub.transition || 'cut',
-          is_branch: sub.isBranch ? 1 : 0,
-          branch_from: sub.branchFrom || null,
           dialogues: typeof sub.dialogues === 'string' ? sub.dialogues : JSON.stringify(sub.dialogues || []),
           triggers: typeof sub.triggers === 'string' ? sub.triggers : JSON.stringify(sub.triggers || []),
           sort_order: sub.sort_order ?? 0,
@@ -205,11 +188,6 @@ export async function PATCH(
       for (const [cid, subs] of Object.entries(byChapter)) {
         await saveSubSections(cid, subs)
       }
-    }
-
-    // 保存结局
-    if (body.endings) {
-      await saveEndings(id, body.endings)
     }
 
     // 保存立绘组合
@@ -232,22 +210,21 @@ export async function PATCH(
 
     // 保存角色 + 立绘
     if (body.characters) {
+      console.log('[PATCH /full] 保存角色, count:', body.characters.length)
       const chars = body.characters.map((c: any) => ({
         id: c.id,
         project_id: id,
         name: c.name || '',
         color: c.color || '#ec4899',
         avatar: c.avatar || null,
-        personality: c.personality || null,
-        description: c.description || null,
         appearance: JSON.stringify(c.appearance || []),
         temperament: JSON.stringify(c.temperament || []),
         extra_description: c.extraDescription || null,
-        sort_order: 0,
         created_at: c.created_at || Date.now(),
         updated_at: Date.now(),
       }))
-      await saveCharacters(id, chars)
+      const { error } = await saveCharacters(id, chars)
+      console.log('[PATCH /full] saveCharacters 结果:', error ? error.message : '成功')
 
       // 提取 sprites 保存到独立表
       for (const c of body.characters) {

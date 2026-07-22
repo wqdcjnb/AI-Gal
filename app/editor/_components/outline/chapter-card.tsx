@@ -29,8 +29,16 @@ export function ChapterCard({
   const [localSummary, setLocalSummary] = useState(chapter.summary)
   const isCommonRoute = chapter.route === 'common'
 
+  // 结局类型对应的按钮颜色
+  const endingButtonColors: Record<string, string> = {
+    'Good End':   'text-emerald-500 hover:text-emerald-600',
+    'Normal End': 'text-blue-500 hover:text-blue-600',
+    'Bad End':    'text-red-500 hover:text-red-600',
+    'True End':   'text-purple-500 hover:text-purple-600',
+  }
+
   // Color scheme based on route, with optional override
-  const colors = cardColors || (isCommonRoute ? ({
+  const routeColors = isCommonRoute ? ({
     border: 'border-indigo-100',
     shadow: 'hover:shadow-indigo-100/50',
     numberBg: 'from-indigo-100 to-violet-100',
@@ -48,7 +56,14 @@ export function ChapterCard({
     hoverBg: 'hover:bg-pink-50',
     buttonText: 'text-pink-500 hover:text-pink-600',
     focusRing: 'focus:bg-pink-50',
-  }))
+  })
+
+  const colors = {
+    ...(cardColors || routeColors),
+    buttonText: (chapter.endingType && endingButtonColors[chapter.endingType])
+      ? endingButtonColors[chapter.endingType]
+      : (cardColors?.buttonText || routeColors.buttonText),
+  }
 
   // Sync local summary when chapter changes
   useEffect(() => {
@@ -132,26 +147,6 @@ export function ChapterCard({
           {/* Collapsible Content */}
           {!isCollapsed && (
             <>
-              {/* Scenes - Editable (hidden in multi-ending and branching mode) */}
-              {!isMultiEnding && !isBranching && (
-                <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                  <MapPin className="h-3 w-3 text-muted-foreground/60" />
-                  {chapter.scenes.map((scene, idx) => (
-                    <span key={idx} className="inline-flex items-center gap-0.5">
-                      <input
-                        type="text"
-                        value={scene}
-                        readOnly
-                        className={cn("bg-transparent text-xs text-muted-foreground outline-none rounded px-1 w-16", colors.focusRing)}
-                      />
-                      {idx < chapter.scenes.length - 1 && <span className="text-muted-foreground/40">/</span>}
-                    </span>
-                  ))}
-                  <button className={cn("transition-colors", colors.buttonText)}>
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </div>
-              )}
 
               {/* Key Points / Sub-sections - Click to open modal */}
               <div className="mt-2 space-y-1">
@@ -165,11 +160,6 @@ export function ChapterCard({
                       <span className="text-xs text-muted-foreground hover:text-foreground">
                         {kp.text}
                       </span>
-                      {kp.description && (
-                        <span className="text-[10px] text-muted-foreground/60 truncate max-w-[120px]">
-                          · {kp.description}
-                        </span>
-                      )}
                     </button>
                   </div>
                 ))}

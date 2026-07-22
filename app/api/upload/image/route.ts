@@ -14,5 +14,5 @@ export async function POST(request: Request) {
   let folder = (formData.get("folder") as string) || "covers"
   if (!ALLOWED_FOLDERS.includes(folder as ImageFolder)) folder = "covers"
 
-  return handleImageUpload(folder as ImageFolder, request)
+  return handleImageUpload(folder as ImageFolder, formData)
 }

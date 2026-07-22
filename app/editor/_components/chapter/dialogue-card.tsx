@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Settings, HelpCircle, Mic, X, Plus, ChevronDown, Trash2, GripVertical } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Settings, HelpCircle, X, Plus, ChevronDown, Trash2, GripVertical, ImageIcon } from 'lucide-react'
 import type { DialogueCardProps, Character } from '@/app/editor/_lib/types'
 import { useProjectStore } from '@/lib/state/project-store-zustand'
 
@@ -12,13 +12,43 @@ function useCharacterOptions(): Character[] {
     ...characters,
   ]
 }
-const bgmOptions: any[] = []
-const seOptions: any[] = []
-const cgOptions: any[] = []
-const voiceOptions: any[] = []
-const bgOptions: any[] = []
+let cachedAssetOptions: { bg: { id: string; name: string }[]; bgm: { id: string; name: string }[]; cg: { id: string; name: string }[] } | null = null
 
-const voiceEmotions = ['默认', '开心', '悲伤', '愤怒', '惊讶', '害羞', '紧张', '温柔', '冷淡']
+function useAssetOptions() {
+  const [opts, setOpts] = useState(cachedAssetOptions || { bg: [], bgm: [], cg: [] })
+  useEffect(() => {
+    const projectId = new URLSearchParams(window.location.search).get('id')
+    if (!projectId) return
+    fetch(`/api/assets?projectId=${projectId}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.success && json.data) {
+          const result = {
+            bg: json.data.filter((a: any) => a.category === 'background'),
+            bgm: json.data.filter((a: any) => a.category === 'bgm'),
+            cg: json.data.filter((a: any) => a.category === 'cg'),
+          }
+          cachedAssetOptions = result
+          setOpts(result)
+        }
+      }).catch(() => {})
+  }, [])
+  return opts
+}
+
+function useSeOptions() {
+  const [options, setOptions] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    const projectId = new URLSearchParams(window.location.search).get('id')
+    if (!projectId) return
+    fetch(`/api/assets?projectId=${projectId}&category=se`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.success && json.data) setOptions(json.data)
+      }).catch(() => {})
+  }, [])
+  return options
+}
 
 const SettingsBlock = ({ show, children }: { show: boolean; children: React.ReactNode }) => {
   if (!show) return null
@@ -38,11 +68,40 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
   const [panelOpen, setPanelOpen] = useState(false)
   const [narrationPanelOpen, setNarrationPanelOpen] = useState(false)
   const [dialoguePanelOpen, setDialoguePanelOpen] = useState(false)
+  const [scenePanelOpen, setScenePanelOpen] = useState(false)
   const charOptions = useCharacterOptions()
+  const seOptions = useSeOptions()
+  const assetOptions = useAssetOptions()
 
   const hasSettings = dialogue.spriteExpression || dialogue.bgmChange || dialogue.soundEffect ||
-    dialogue.cgTrigger || (dialogue.screenEffect && dialogue.screenEffect !== 'none') ||
-    dialogue.voiceId || dialogue.voiceEmotion
+    dialogue.cgTrigger
+
+  // ── Scene ──
+  if (dialogue.type === 'scene') {
+    return (
+      <>
+        <div className="group rounded-lg border-2 border-dashed border-emerald-400/50 bg-emerald-50/20 p-3 hover:border-emerald-400 cursor-pointer"
+          onClick={() => setScenePanelOpen(true)}
+          draggable onDragStart={(e) => onDragStart?.(e, index)} onDragOver={onDragOver} onDrop={(e) => onDrop?.(e, index)}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
+            <ImageIcon className="h-4 w-4 text-emerald-500" />
+            <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">场景</span>
+            <div className="flex-1" />
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {dialogue.backgroundChange && <span className="rounded bg-emerald-50 px-1.5 py-0.5">🖼️ {dialogue.backgroundChange}</span>}
+            {dialogue.bgmChange && <span className="rounded bg-blue-50 px-1.5 py-0.5">🎵 {dialogue.bgmChange}</span>}
+            {dialogue.cgTrigger && <span className="rounded bg-amber-50 px-1.5 py-0.5">🎬 {dialogue.cgTrigger}</span>}
+          </div>
+        </div>
+        {scenePanelOpen && (
+          <SceneEditPanel dialogue={dialogue} onUpdate={onUpdate} onDelete={onDelete} onClose={() => setScenePanelOpen(false)}
+            bgOptions={assetOptions.bg} bgmOptions={assetOptions.bgm} cgOptions={assetOptions.cg} />
+        )}
+      </>
+    )
+  }
 
   // ── Narration ──
   if (dialogue.type === 'narration') {
@@ -65,7 +124,7 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
           <p className="text-sm italic text-muted-foreground line-clamp-2">{dialogue.content}</p>
         </div>
         <SettingsBlock show={showSettings}>
-          <PerfSettings dialogue={dialogue} onUpdate={onUpdate} />
+          <PerfSettings dialogue={dialogue} onUpdate={onUpdate} seOptions={seOptions} />
         </SettingsBlock>
         {narrationPanelOpen && (
           <NarrationEditPanel
@@ -143,11 +202,12 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
         <p className="text-sm text-foreground">{dialogue.content}</p>
       </div>
       <SettingsBlock show={showSettings}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-muted-foreground">🎭 立绘</label>
             <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.spriteId || ''}
               onChange={(e) => onUpdate?.({ ...dialogue, spriteId: e.target.value || undefined })}>
+              <option value="">无</option>
               {charCombos.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
@@ -159,25 +219,15 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
               <option value="left">左</option><option value="center">中</option><option value="right">右</option>
             </select>
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground flex items-center gap-1"><Mic className="h-3 w-3" />角色语音</label>
-            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.voiceId || ''}
-              onChange={(e) => onUpdate?.({ ...dialogue, voiceId: e.target.value || undefined })}>
+            <label className="text-xs text-muted-foreground">🔊 音效</label>
+            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.soundEffect || ''}
+              onChange={(e) => onUpdate?.({ ...dialogue, soundEffect: e.target.value || undefined })}>
               <option value="">无</option>
-              {voiceOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">🎙️ 语音情绪</label>
-            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.voiceEmotion || '默认'}
-              onChange={(e) => onUpdate?.({ ...dialogue, voiceEmotion: e.target.value })}>
-              {voiceEmotions.map(ve => <option key={ve} value={ve}>{ve}</option>)}
+              {seOptions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
           </div>
         </div>
-        <PerfSettings dialogue={dialogue} onUpdate={onUpdate} />
       </SettingsBlock>
       {dialoguePanelOpen && (
         <DialogueEditPanel dialogue={dialogue} onUpdate={onUpdate} onDelete={onDelete} onClose={() => setDialoguePanelOpen(false)} />
@@ -344,79 +394,67 @@ function ChoicePanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any;
 
 // ── Indicator badges ──
 function IndicatorBadges({ dialogue }: { dialogue: DialogueCardProps['dialogue'] }) {
-  const [playing, setPlaying] = useState(false)
-
   return (
     <div className="flex items-center gap-1">
-      {dialogue.backgroundChange && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-600">🖼️</span>}
-      {dialogue.bgmChange && <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-600">🎵</span>}
       {dialogue.soundEffect && <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] text-green-600">🔊</span>}
-      {dialogue.cgTrigger && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-600">🎬</span>}
-      {dialogue.screenEffect && dialogue.screenEffect !== 'none' && <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-600">⚡</span>}
-      {dialogue.voiceId && (
-        <span onClick={(e) => { e.stopPropagation(); setPlaying(!playing) }}
-          className={`rounded px-1.5 py-0.5 text-[10px] cursor-pointer transition-colors ${playing ? 'bg-cyan-200 text-cyan-800' : 'bg-cyan-100 text-cyan-600 hover:bg-cyan-200'}`}>
-          {playing ? '🔊' : '🎙️'}
-        </span>
-      )}
     </div>
   )
 }
 
 // ── Performance settings ──
-function PerfSettings({ dialogue, onUpdate }: { dialogue: any; onUpdate?: any }) {
+function PerfSettings({ dialogue, onUpdate, seOptions }: { dialogue: any; onUpdate?: any; seOptions: { id: string; name: string }[] }) {
   return (
-    <>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-muted-foreground">🖼️ 背景</label>
-          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.backgroundChange || ''}
-            onChange={(e) => onUpdate?.({ ...dialogue, backgroundChange: e.target.value || undefined })}>
-            {bgOptions.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">🎵 BGM</label>
-          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.bgmChange || ''}
-            onChange={(e) => onUpdate?.({ ...dialogue, bgmChange: e.target.value || undefined })}>
-            {bgmOptions.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-          </select>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-muted-foreground">🔊 音效</label>
-          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.soundEffect || ''}
-            onChange={(e) => onUpdate?.({ ...dialogue, soundEffect: e.target.value || undefined })}>
-            <option value="">无</option>
-            {seOptions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">🎬 CG</label>
-          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.cgTrigger || ''}
-            onChange={(e) => onUpdate?.({ ...dialogue, cgTrigger: e.target.value || undefined })}>
-            <option value="">无</option>
-            {cgOptions.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-          </select>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-muted-foreground">⚡ 画面特效</label>
-          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.screenEffect || 'none'}
-            onChange={(e) => onUpdate?.({ ...dialogue, screenEffect: e.target.value as any })}>
-            <option value="none">无</option><option value="shake">震动</option><option value="flash_white">闪白</option><option value="flash_black">闪黑</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">✨ 转场</label>
-          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.transition || 'cut'}
-            onChange={(e) => onUpdate?.({ ...dialogue, transition: e.target.value as any })}>
-            <option value="cut">硬切</option><option value="fade">淡入淡出</option><option value="dissolve">溶解</option><option value="wipe">擦除</option>
-          </select>
-        </div>
-      </div>
-    </>
+    <div>
+      <label className="text-xs text-muted-foreground">🔊 音效</label>
+      <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.soundEffect || ''}
+        onChange={(e) => onUpdate?.({ ...dialogue, soundEffect: e.target.value || undefined })}>
+        <option value="">无</option>
+        {seOptions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+      </select>
+    </div>
   )
 }
+
+// ── Scene Edit Panel ──
+function SceneEditPanel({ dialogue, onUpdate, onClose, onDelete, bgOptions, bgmOptions, cgOptions }: {
+  dialogue: any; onUpdate?: any; onClose: () => void; onDelete?: () => void
+  bgOptions: { id: string; name: string }[]
+  bgmOptions: { id: string; name: string }[]
+  cgOptions: { id: string; name: string }[]
+}) {
+  const [bg, setBg] = useState(dialogue.backgroundChange || '')
+  const [bgm, setBgm] = useState(dialogue.bgmChange || '')
+  const [cg, setCg] = useState(dialogue.cgTrigger || '')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-5 mx-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground">编辑场景</h3>
+          <DeleteConfirmButton onDelete={() => { onDelete?.(); onClose() }} />
+        </div>
+        <label className="text-[10px] text-muted-foreground mb-1 block">🖼️ 背景</label>
+        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3" value={bg} onChange={e => setBg(e.target.value)}>
+          <option value="">无</option>
+          {bgOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+        </select>
+        <label className="text-[10px] text-muted-foreground mb-1 block">🎵 BGM</label>
+        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3" value={bgm} onChange={e => setBgm(e.target.value)}>
+          <option value="">无</option>
+          {bgmOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+        </select>
+        <label className="text-[10px] text-muted-foreground mb-1 block">🎬 CG</label>
+        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-4" value={cg} onChange={e => setCg(e.target.value)}>
+          <option value="">无</option>
+          {cgOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+        </select>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
+          <button onClick={() => { onUpdate?.({ ...dialogue, backgroundChange: bg || undefined, bgmChange: bgm || undefined, cgTrigger: cg || undefined }); onClose() }}
+            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+

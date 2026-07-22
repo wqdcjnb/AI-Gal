@@ -69,7 +69,6 @@ export default function OutlinePage() {
     const newKeyPoint: KeyPoint = {
       id: `kp-${Date.now()}`,
       text: '',
-      description: '',
     }
     setSelectedKeyPoint({ chapterId, keyPoint: newKeyPoint })
     setIsNewKeyPoint(true)
@@ -119,7 +118,7 @@ export default function OutlinePage() {
 
       {/* Content */}
       {isGenerating ? (
-        <GeneratingSkeleton count={project.chapterCount} />
+        <GeneratingSkeleton count={project.chapters.length} />
       ) : isBranching ? (
         <TreeView
           chapters={project.chapters}

@@ -28,6 +28,7 @@ export function ComboCard({
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(combo.name)
   const [preview, setPreview] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
 
   const saveName = () => {
     const name = editName.trim()
@@ -59,10 +60,23 @@ export function ComboCard({
               {selectedChar.name[0]}
             </div>
           )}
-          <button onClick={(e) => { e.stopPropagation(); onDelete() }}
+          <button onClick={(e) => { e.stopPropagation(); setShowDelete(true) }}
             className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity">
             <X className="h-3 w-3" />
           </button>
+          {/* 删除确认 */}
+          {showDelete && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40" onClick={(e) => { e.stopPropagation(); setShowDelete(false) }}>
+              <div className="mx-4 w-full max-w-xs rounded-xl bg-white p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-sm font-semibold">确认删除</h3>
+                <p className="mt-1 text-xs text-muted-foreground">确定要删除「{combo.name}」吗？</p>
+                <div className="mt-3 flex gap-2">
+                  <button onClick={(e) => { e.stopPropagation(); setShowDelete(false) }} className="flex-1 rounded-lg border py-1.5 text-xs">取消</button>
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(); setShowDelete(false) }} className="flex-1 rounded-lg bg-red-500 py-1.5 text-xs text-white">删除</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <div className="p-2">
           {editing ? (

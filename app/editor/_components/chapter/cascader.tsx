@@ -13,6 +13,7 @@ export function Cascader({ options, value, onChange, placeholder }: {
 }) {
   const [open, setOpen] = useState(false)
   const [level1, setLevel1] = useState<string | null>(null)
+  const [level2, setLevel2] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -21,28 +22,29 @@ export function Cascader({ options, value, onChange, placeholder }: {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const selectedOption = findOption(options, value)
-  const displayText = selectedOption ? getPath(options, value).join(' / ') : ''
+  const displayText = getPath(options, value).join(' › ')
 
-  const l1Options = options
-  const l2Options = level1 ? options.find(o => o.value === level1)?.children || [] : []
+  const l1 = options
+  const l2 = level1 ? options.find(o => o.value === level1)?.children || [] : []
+  const l3 = level2 ? l2.find(o => o.value === level2)?.children || [] : []
 
   const selectL1 = (v: string) => {
     const opt = options.find(o => o.value === v)
-    if (opt?.children?.length) {
-      setLevel1(v)
-    } else {
-      onChange(v)
-      setOpen(false)
-      setLevel1(null)
-    }
+    if (opt?.children?.length) { setLevel1(v); setLevel2(null) }
+    else { onChange(v); setOpen(false); reset() }
   }
 
   const selectL2 = (v: string) => {
-    onChange(v)
-    setOpen(false)
-    setLevel1(null)
+    const opt = l2.find(o => o.value === v)
+    if (opt?.children?.length) { setLevel2(v) }
+    else { onChange(v); setOpen(false); reset() }
   }
+
+  const selectL3 = (v: string) => {
+    onChange(v); setOpen(false); reset()
+  }
+
+  const reset = () => { setLevel1(null); setLevel2(null) }
 
   return (
     <div ref={ref} className="relative">
@@ -54,10 +56,10 @@ export function Cascader({ options, value, onChange, placeholder }: {
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg border border-border shadow-lg z-50 flex">
+        <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg border border-border shadow-lg z-50 flex min-w-[360px]">
           {/* Level 1 */}
           <div className="flex-1 max-h-48 overflow-y-auto border-r border-border">
-            {l1Options.map(o => (
+            {l1.map(o => (
               <button key={o.value}
                 onClick={() => selectL1(o.value)}
                 className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between ${level1 === o.value ? 'bg-pink-50 text-pink-600' : 'hover:bg-muted'}`}>
@@ -67,11 +69,24 @@ export function Cascader({ options, value, onChange, placeholder }: {
             ))}
           </div>
           {/* Level 2 */}
-          {l2Options.length > 0 && (
-            <div className="flex-1 max-h-48 overflow-y-auto">
-              {l2Options.map(o => (
+          {l2.length > 0 && (
+            <div className="flex-1 max-h-48 overflow-y-auto border-r border-border">
+              {l2.map(o => (
                 <button key={o.value}
                   onClick={() => selectL2(o.value)}
+                  className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between ${level2 === o.value ? 'bg-pink-50 text-pink-600' : 'hover:bg-muted'}`}>
+                  {o.label}
+                  {o.children?.length ? <ChevronRight className="h-3 w-3 text-muted-foreground" /> : null}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Level 3 */}
+          {l3.length > 0 && (
+            <div className="flex-1 max-h-48 overflow-y-auto">
+              {l3.map(o => (
+                <button key={o.value}
+                  onClick={() => selectL3(o.value)}
                   className={`w-full text-left px-3 py-1.5 text-xs ${value === o.value ? 'bg-pink-50 text-pink-600' : 'hover:bg-muted'}`}>
                   {o.label}
                 </button>

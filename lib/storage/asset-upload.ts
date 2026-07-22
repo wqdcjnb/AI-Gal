@@ -8,7 +8,8 @@ import { NextResponse } from "next/server"
 import { uploadToPGStorage } from "@/lib/storage/pg-storage"
 
 const COOKIE_NAME = "cloudbase_token"
-const MAX_SIZE = 5 * 1024 * 1024 // 5MB，和图片上传保持一致
+const MAX_SIZE_IMAGE = 5 * 1024 * 1024  // 5MB 图片
+const MAX_SIZE_AUDIO = 10 * 1024 * 1024 // 10MB 音频
 const BUCKET_ID = "assets"
 
 interface AssetConfig {
@@ -32,17 +33,14 @@ export const ASSET_CONFIGS: Record<string, AssetConfig> = {
   bgm: {
     category: "bgm",
     label: "BGM",
-    acceptMime: ["audio/mpeg", "audio/wav", "audio/ogg", "audio/mp3", "audio/flac"],
+    acceptMime: ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/x-flac", "audio/flac"],
+    maxSize: MAX_SIZE_AUDIO,
   },
   se: {
     category: "se",
     label: "音效",
-    acceptMime: ["audio/mpeg", "audio/wav", "audio/ogg", "audio/mp3", "audio/flac"],
-  },
-  voice: {
-    category: "voice",
-    label: "语音",
-    acceptMime: ["audio/mpeg", "audio/wav", "audio/ogg", "audio/mp3", "audio/flac"],
+    acceptMime: ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/x-flac", "audio/flac"],
+    maxSize: MAX_SIZE_AUDIO,
   },
 }
 
@@ -54,7 +52,7 @@ export async function handleAssetUpload(config: AssetConfig, request: Request) {
   const parsed = parseAccessToken(token)
   if (!parsed?.uid) return NextResponse.json({ success: false, message: "未登录" }, { status: 401 })
 
-  const maxSize = config.maxSize || MAX_SIZE
+  const maxSize = config.maxSize || MAX_SIZE_IMAGE
 
   try {
     const formData = await request.formData()

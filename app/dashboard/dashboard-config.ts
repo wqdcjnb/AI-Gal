@@ -6,13 +6,12 @@ export interface GameProject {
   structure: string
   synopsis: string
   cover_url: string | null
-  chapter_count: number
   status: 'editing' | 'complete'
   created_at: string
   updated_at: string
   chapterCount?: number
-  sceneCount?: number
   characterCount?: number
+  routeCount?: number
 }
 
 export const STYLE_LABELS: Record<string, { label: string; icon: string; color: string; desc: string }> = {

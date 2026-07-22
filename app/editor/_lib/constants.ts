@@ -1,11 +1,14 @@
-import { FileText, BookOpen, Users, Image } from 'lucide-react'
+import { FileText, BookOpen, Users, Image, Mic, Play, Download } from 'lucide-react'
 
 // Tabs
 export const tabs = [
   { id: 'outline', label: '大纲', icon: FileText },
-  { id: 'chapter', label: '章节', icon: BookOpen },
+  { id: 'chapter', label: '剧本', icon: BookOpen },
   { id: 'characters', label: '角色', icon: Users },
   { id: 'assets', label: '素材', icon: Image },
+  { id: 'preview', label: '预览', icon: Play },
+  { id: 'voice', label: '语音', icon: Mic },
+  { id: 'export', label: '导出', icon: Download },
 ]
 
 // Route labels
@@ -19,22 +22,21 @@ export const routeLabels: Record<string, { label: string; color: string; emoji: 
 
 // Ending labels（key 对应 Chapter.endingType 的值）
 export const endingLabels: Record<string, { label: string; color: string; emoji: string }> = {
-  'Good End':   { label: 'Good End',   color: 'bg-pink-100 text-pink-700 border-pink-200',     emoji: '🌸' },
+  'Good End':   { label: 'Good End',   color: 'bg-emerald-100 text-emerald-700 border-emerald-200', emoji: '🌸' },
   'Normal End': { label: 'Normal End', color: 'bg-blue-100 text-blue-700 border-blue-200',    emoji: '🌿' },
   'Bad End':    { label: 'Bad End',    color: 'bg-red-100 text-red-700 border-red-200',       emoji: '💀' },
-  'True End':   { label: 'True End',   color: 'bg-emerald-100 text-emerald-700 border-emerald-200', emoji: '⭐' },
+  'True End':   { label: 'True End',   color: 'bg-purple-100 text-purple-700 border-purple-200', emoji: '⭐' },
 }
 
 // Asset category config
 import type { AssetCategory } from '@/app/editor/_lib/types'
-import { ImageIcon, Eye, Music2, Volume2, Mic } from 'lucide-react'
+import { ImageIcon, Eye, Music2, Volume2 } from 'lucide-react'
 
 export const assetCategories: { id: AssetCategory; label: string; icon: typeof Image; color: string; description: string }[] = [
   { id: 'background', label: '背景', icon: ImageIcon, color: 'emerald', description: '场景背景图，每个场景一张' },
   { id: 'cg', label: 'CG', icon: Eye, color: 'amber', description: '特殊事件插画，关键剧情触发' },
   { id: 'bgm', label: 'BGM', icon: Music2, color: 'blue', description: '背景音乐，烘托氛围情绪' },
   { id: 'se', label: '音效', icon: Volume2, color: 'green', description: '环境音效与交互音效' },
-  { id: 'voice', label: '语音', icon: Mic, color: 'violet', description: '角色语音台词' },
 ]
 
 // Color mapping for category badges
@@ -52,5 +54,4 @@ export const placeholderGradients: Record<string, string> = {
   cg: 'from-amber-100 via-orange-50 to-rose-100',
   bgm: 'from-blue-100 via-indigo-50 to-violet-100',
   se: 'from-green-100 via-emerald-50 to-teal-100',
-  voice: 'from-violet-100 via-purple-50 to-fuchsia-100',
 }

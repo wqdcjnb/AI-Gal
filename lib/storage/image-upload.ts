@@ -54,8 +54,9 @@ export async function uploadImage(folder: ImageFolder, file: File): Promise<{ cd
 
 /**
  * 完整 API handler — auth + 校验 + 上传，返回 NextResponse
+ * @param formData 可选：调用方已经读过 formData 时可传入，避免重复读取 Request body
  */
-export async function handleImageUpload(folder: ImageFolder, request: Request): Promise<NextResponse> {
+export async function handleImageUpload(folder: ImageFolder, requestOrFormData: Request | FormData): Promise<NextResponse> {
   const cookieStore = await cookies()
   const token = cookieStore.get(COOKIE_NAME)?.value
   if (!token) return NextResponse.json({ success: false, message: "未登录" }, { status: 401 })
@@ -67,7 +68,9 @@ export async function handleImageUpload(folder: ImageFolder, request: Request): 
   const config = IMAGE_CONFIGS[folder]
 
   try {
-    const formData = await request.formData()
+    const formData = requestOrFormData instanceof FormData
+      ? requestOrFormData
+      : await (requestOrFormData as Request).formData()
     const file = (formData.get("file") || formData.get("cover") || formData.get("avatar")) as File | null
 
     if (!file) return NextResponse.json({ success: false, message: "未选择文件" }, { status: 400 })

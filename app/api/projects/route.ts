@@ -12,6 +12,8 @@ import {
   createProject,
   updateProject,
   deleteProject,
+  listChapters,
+  listCharacters,
 } from "@/lib/db/project-store"
 
 const COOKIE_NAME = "cloudbase_token"
@@ -35,7 +37,23 @@ export async function GET() {
     return NextResponse.json({ success: false, message: "查询失败" }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true, data })
+  // 补充每个项目的角色数量和路线数量
+  const enriched = await Promise.all((data || []).map(async (p: any) => {
+    const [chRes, charRes] = await Promise.all([
+      listChapters(p.id),
+      listCharacters(p.id),
+    ])
+    const chapters = chRes.data || []
+    const routeSet = new Set(chapters.filter((c: any) => c.route !== 'common').map((c: any) => c.route))
+    return {
+      ...p,
+      chapterCount: chapters.length,
+      characterCount: (charRes.data || []).length,
+      routeCount: routeSet.size,
+    }
+  }))
+
+  return NextResponse.json({ success: true, data: enriched })
 }
 
 // ============================================================
@@ -63,7 +81,6 @@ export async function POST(request: Request) {
       theme_background: body.theme_background,
       narrative_structure: body.narrative_structure,
       synopsis: body.synopsis || "",
-      chapter_count: body.chapter_count ?? 6,
       cover_url: body.cover_url ?? null,
       status: "editing",
       created_at: now,
@@ -99,7 +116,6 @@ export async function PATCH(request: Request) {
     if (rest.narrative_structure) fields.narrative_structure = rest.narrative_structure
     if (rest.synopsis !== undefined) fields.synopsis = rest.synopsis
     if (rest.cover_url !== undefined) fields.cover_url = rest.cover_url
-    if (rest.chapter_count !== undefined) fields.chapter_count = rest.chapter_count
     if (rest.status) fields.status = rest.status
 
     const { error } = await updateProject(id, fields as any)

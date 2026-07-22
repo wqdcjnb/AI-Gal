@@ -1,12 +1,37 @@
 'use client'
 
-import { useState } from 'react'
-import { MessageSquare, Quote, User, HelpCircle, Sparkles, Zap, X, Plus } from 'lucide-react'
-import type { SubSectionCardProps } from '@/app/editor/_lib/types'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { MessageSquare, Quote, User, HelpCircle, Sparkles, Zap, X, Plus, ImageIcon } from 'lucide-react'
+import type { SubSectionCardProps, DialogueLine } from '@/app/editor/_lib/types'
 import { DialogueCard } from '@/app/editor/_components/chapter/dialogue-card'
 import { TriggerCard, TriggerPanel } from '@/app/editor/_components/chapter/trigger-card'
 import type { Trigger } from '@/app/editor/_lib/types'
 import { useProjectStore } from '@/lib/state/project-store-zustand'
+
+// 预加载素材选项（缓存，只请求一次）
+let cachedAssetOptions: { bg: { id: string; name: string }[]; bgm: { id: string; name: string }[]; cg: { id: string; name: string }[] } | null = null
+
+function useAssetOptions() {
+  const [opts, setOpts] = useState(cachedAssetOptions || { bg: [], bgm: [], cg: [] })
+  useEffect(() => {
+    const projectId = new URLSearchParams(window.location.search).get('id')
+    if (!projectId) return
+    fetch(`/api/assets?projectId=${projectId}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.success && json.data) {
+          const result = {
+            bg: json.data.filter((a: any) => a.category === 'background'),
+            bgm: json.data.filter((a: any) => a.category === 'bgm'),
+            cg: json.data.filter((a: any) => a.category === 'cg'),
+          }
+          cachedAssetOptions = result
+          setOpts(result)
+        }
+      }).catch(() => {})
+  }, [])
+  return opts
+}
 
 function useCharacterOptions() {
   const characters = useProjectStore(s => s.characters)
@@ -21,10 +46,75 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
   const [showNewNarration, setShowNewNarration] = useState(false)
   const [showNewDialogue, setShowNewDialogue] = useState(false)
   const [showNewTrigger, setShowNewTrigger] = useState(false)
+  const [showNewScene, setShowNewScene] = useState(false)
   const [editingTrigger, setEditingTrigger] = useState<Trigger | null>(null)
   const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const assetOptions = useAssetOptions()
 
-  // Choices available for trigger conditions
+  // ═══════════════════════════════════════════════
+  // Unified timeline — all items in one flat list
+  // ═══════════════════════════════════════════════
+  type TimelineItem =
+    | { kind: 'dialogue'; data: DialogueLine }
+    | { kind: 'trigger'; data: Trigger }
+
+  const buildTimeline = (d: DialogueLine[], t: Trigger[]): TimelineItem[] => [
+    ...d.map(dd => ({ kind: 'dialogue' as const, data: dd })),
+    ...t.map(tt => ({ kind: 'trigger' as const, data: tt })),
+  ]
+
+  const [timeline, setTimeline] = useState<TimelineItem[]>(() =>
+    buildTimeline(subSection.dialogues, subSection.triggers || [])
+  )
+
+  // Detect external changes (API load / navigation) vs internal updates
+  const isInternal = useRef(false)
+  const propsFingerprint = useMemo(() => {
+    const dIds = subSection.dialogues.map(d => d.id).sort().join(',')
+    const tIds = (subSection.triggers || []).map(t => t.id).sort().join(',')
+    return `${dIds}|${tIds}`
+  }, [subSection.dialogues, subSection.triggers])
+
+  const prevFingerprint = useRef(propsFingerprint)
+
+  useEffect(() => {
+    if (isInternal.current) {
+      isInternal.current = false
+      prevFingerprint.current = propsFingerprint
+      return
+    }
+    if (prevFingerprint.current !== propsFingerprint) {
+      prevFingerprint.current = propsFingerprint
+      setTimeline(buildTimeline(subSection.dialogues, subSection.triggers || []))
+    }
+  }, [propsFingerprint, subSection.dialogues, subSection.triggers])
+
+  // Reset on subsection change
+  const prevSubId = useRef(subSection.id)
+  useEffect(() => {
+    if (prevSubId.current !== subSection.id) {
+      prevSubId.current = subSection.id
+      isInternal.current = false
+      setTimeline(buildTimeline(subSection.dialogues, subSection.triggers || []))
+    }
+  }, [subSection.id, subSection.dialogues, subSection.triggers])
+
+  const splitTimeline = (tl: TimelineItem[]) => {
+    const newDialogues: DialogueLine[] = []
+    const newTriggers: Trigger[] = []
+    for (const item of tl) {
+      if (item.kind === 'dialogue') newDialogues.push(item.data)
+      else newTriggers.push(item.data)
+    }
+    return { dialogues: newDialogues, triggers: newTriggers }
+  }
+
+  const persist = (tl: TimelineItem[]) => {
+    isInternal.current = true
+    const { dialogues: newDialogues, triggers: newTriggers } = splitTimeline(tl)
+    onUpdate?.({ ...subSection, dialogues: newDialogues, triggers: newTriggers })
+  }
+
   const choiceOptions = subSection.dialogues
     .filter(d => d.type === 'choice')
     .map(d => ({
@@ -33,6 +123,7 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
       options: (d.choices || []).map((c, i) => ({ text: c.text, index: i })),
     }))
 
+  // ── Drag handlers ──
   const handleDragStart = (e: React.DragEvent, idx: number) => {
     setDragIdx(idx)
     e.dataTransfer.effectAllowed = 'move'
@@ -45,12 +136,38 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
 
   const handleDrop = (e: React.DragEvent, dropIdx: number) => {
     e.preventDefault()
-    if (dragIdx === null || dragIdx === dropIdx) return
-    const dialogues = [...subSection.dialogues]
-    const [moved] = dialogues.splice(dragIdx, 1)
-    dialogues.splice(dropIdx, 0, moved)
-    onUpdate?.({ ...subSection, dialogues })
+    if (dragIdx === null || dragIdx === dropIdx || dragIdx >= timeline.length) return
+    const next = [...timeline]
+    const [moved] = next.splice(dragIdx, 1)
+    if (moved) {
+      next.splice(dropIdx, 0, moved)
+      setTimeline(next)
+      persist(next)
+    }
     setDragIdx(null)
+  }
+
+  // ── CRUD helpers ──
+  const appendItem = (item: TimelineItem) => {
+    const next = [...timeline, item]
+    setTimeline(next)
+    persist(next)
+  }
+
+  const removeItem = (idx: number) => {
+    const next = timeline.filter((_, i) => i !== idx)
+    setTimeline(next)
+    persist(next)
+  }
+
+  const updateDialogue = (id: string, updated: DialogueLine) => {
+    const next = timeline.map(item =>
+      item.kind === 'dialogue' && item.data.id === id
+        ? { kind: 'dialogue' as const, data: updated }
+        : item
+    )
+    setTimeline(next)
+    persist(next)
   }
 
   return (
@@ -58,18 +175,26 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
     {showNewChoice && (
       <NewChoicePanel
         onSave={(prompt, choices) => {
-          const newChoice = { id: `d-${Date.now()}`, type: 'choice' as const, content: prompt, choices }
-          onUpdate?.({ ...subSection, dialogues: [...subSection.dialogues, newChoice] })
+          appendItem({ kind: 'dialogue', data: { id: `d-${Date.now()}`, type: 'choice', content: prompt, choices } })
           setShowNewChoice(false)
         }}
         onClose={() => setShowNewChoice(false)}
       />
     )}
+    {showNewScene && (
+      <SceneNewPanel
+        bgOptions={assetOptions.bg} bgmOptions={assetOptions.bgm} cgOptions={assetOptions.cg}
+        onSave={(bg, bgm, cg) => {
+          appendItem({ kind: 'dialogue', data: { id: `d-${Date.now()}`, type: 'scene', backgroundChange: bg || undefined, bgmChange: bgm || undefined, cgTrigger: cg || undefined, content: '' } })
+          setShowNewScene(false)
+        }}
+        onClose={() => setShowNewScene(false)}
+      />
+    )}
     {showNewNarration && (
       <NarrationPanel
         onSave={(label, content) => {
-          const newNar = { id: `d-${Date.now()}`, type: 'narration' as const, characterName: label, content }
-          onUpdate?.({ ...subSection, dialogues: [...subSection.dialogues, newNar] })
+          appendItem({ kind: 'dialogue', data: { id: `d-${Date.now()}`, type: 'narration', characterName: label, content } })
           setShowNewNarration(false)
         }}
         onClose={() => setShowNewNarration(false)}
@@ -78,8 +203,7 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
     {showNewDialogue && (
       <DialogueNewPanel
         onSave={(charId, charName, charColor, content) => {
-          const newDialogue = { id: `d-${Date.now()}`, type: 'dialogue' as const, characterId: charId, characterName: charName, characterColor: charColor, content }
-          onUpdate?.({ ...subSection, dialogues: [...subSection.dialogues, newDialogue] })
+          appendItem({ kind: 'dialogue', data: { id: `d-${Date.now()}`, type: 'dialogue', characterId: charId, characterName: charName, characterColor: charColor, content } })
           setShowNewDialogue(false)
         }}
         onClose={() => setShowNewDialogue(false)}
@@ -91,17 +215,24 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
         choiceOptions={choiceOptions}
         subSectionIds={subSectionTree || allSubSections.map(s => ({ value: s.id, label: s.title }))}
         onSave={(t) => {
-          const triggers = subSection.triggers || []
           if (editingTrigger) {
-            onUpdate?.({ ...subSection, triggers: triggers.map(tr => tr.id === t.id ? t : tr) })
+            // Edit in place
+            const next = timeline.map(item =>
+              item.kind === 'trigger' && item.data.id === editingTrigger.id
+                ? { kind: 'trigger' as const, data: t }
+                : item
+            )
+            setTimeline(next)
+            persist(next)
           } else {
-            onUpdate?.({ ...subSection, triggers: [...triggers, t] })
+            appendItem({ kind: 'trigger', data: t })
           }
           setShowNewTrigger(false)
           setEditingTrigger(null)
         }}
         onDelete={editingTrigger ? () => {
-          onUpdate?.({ ...subSection, triggers: (subSection.triggers || []).filter(t => t.id !== editingTrigger.id) })
+          const idx = timeline.findIndex(i => i.kind === 'trigger' && i.data.id === editingTrigger.id)
+          if (idx !== -1) removeItem(idx)
         } : undefined}
         onClose={() => { setShowNewTrigger(false); setEditingTrigger(null) }}
       />
@@ -115,7 +246,7 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
           <h4 className="font-medium text-foreground truncate">{subSection.title}</h4>
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <MessageSquare className="h-3 w-3" />
-            {subSection.dialogues.length} 条对话
+            {timeline.length} 条内容
           </span>
         </div>
       </div>
@@ -123,23 +254,31 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
       {isExpanded && (
         <div className="border-t border-border bg-muted/20 p-4">
           <div className="space-y-3">
-            {subSection.dialogues.map((dialogue, dIndex) => (
-              <DialogueCard key={dialogue.id} dialogue={dialogue} index={dIndex} subSectionIds={allSubSections}
-                onUpdate={(updated) => {
-                  onUpdate?.({ ...subSection, dialogues: subSection.dialogues.map(d => d.id === updated.id ? updated : d) })
-                }}
-                onDelete={() => {
-                  onUpdate?.({ ...subSection, dialogues: subSection.dialogues.filter(d => d.id !== dialogue.id) })
-                }}
-                onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDrop} />
-            ))}
-            {/* Trigger cards */}
-            {(subSection.triggers || []).map((t) => (
-              <TriggerCard key={t.id} trigger={t} onEdit={() => setEditingTrigger(t)} subSectionTree={subSectionTree} />
-            ))}
+            {timeline.map((item, ti) => {
+              if (item.kind === 'trigger') {
+                return (
+                  <TriggerCard key={item.data.id} trigger={item.data} onEdit={() => setEditingTrigger(item.data)} subSectionTree={subSectionTree}
+                    onDragStart={(e) => handleDragStart(e, ti)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, ti)}
+                  />
+                )
+              }
+              const dialogue = item.data
+              const displayIndex = timeline.slice(0, ti).filter(i => i.kind === 'dialogue' && i.data.type !== 'scene').length
+              return <DialogueCard key={dialogue.id} dialogue={dialogue} index={displayIndex} subSectionIds={allSubSections}
+                onUpdate={(updated) => updateDialogue(dialogue.id, updated)}
+                onDelete={() => removeItem(ti)}
+                onDragStart={(e) => handleDragStart(e, ti)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, ti)}
+              />
+            })}
           </div>
 
           <div className="flex items-center gap-2 pt-4 mt-4 border-t border-border">
+            <button onClick={() => setShowNewScene(true)}
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground hover:border-pink-200 hover:text-pink-600 transition-colors">
+              <ImageIcon className="h-4 w-4" />场景
+            </button>
             <button onClick={() => setShowNewNarration(true)}
               className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground hover:border-pink-200 hover:text-pink-600 transition-colors">
               <Quote className="h-4 w-4" />旁白
@@ -269,6 +408,47 @@ function NewChoicePanel({ onSave, onClose }: { onSave: (prompt: string, choices:
           <button onClick={() => { if (!canSave) return; onSave(prompt.trim(), validChoices); onClose() }}
             disabled={!canSave}
             className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium disabled:opacity-50">保存</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Scene New Panel ──
+function SceneNewPanel({ onSave, onClose, bgOptions, bgmOptions, cgOptions }: {
+  onSave: (bg: string, bgm: string, cg: string) => void
+  onClose: () => void
+  bgOptions: { id: string; name: string }[]
+  bgmOptions: { id: string; name: string }[]
+  cgOptions: { id: string; name: string }[]
+}) {
+  const [bg, setBg] = useState('')
+  const [bgm, setBgm] = useState('')
+  const [cg, setCg] = useState('')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-5 mx-4" onClick={e => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-foreground mb-3">新建场景</h3>
+        <label className="text-[10px] text-muted-foreground mb-1 block">🖼️ 背景</label>
+        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3" value={bg} onChange={e => setBg(e.target.value)}>
+          <option value="">无</option>
+          {bgOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+        </select>
+        <label className="text-[10px] text-muted-foreground mb-1 block">🎵 BGM</label>
+        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3" value={bgm} onChange={e => setBgm(e.target.value)}>
+          <option value="">无</option>
+          {bgmOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+        </select>
+        <label className="text-[10px] text-muted-foreground mb-1 block">🎬 CG</label>
+        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-4" value={cg} onChange={e => setCg(e.target.value)}>
+          <option value="">无</option>
+          {cgOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+        </select>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
+          <button onClick={() => { onSave(bg, bgm, cg); onClose() }}
+            className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium">保存</button>
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
-import type { ProjectData, Chapter, KeyPoint, Ending } from '@/app/editor/_lib/types'
+import type { ProjectData, Chapter, KeyPoint } from '@/app/editor/_lib/types'
 import { useProjectStore } from '@/lib/state/project-store-zustand'
 import { toChineseNumber } from '@/app/editor/_lib/utils'
 
@@ -27,29 +27,16 @@ interface ProjectContextType {
   updateKeyPoint: (chapterId: string, keyPointId: string, text: string) => void
   updateKeyPointData: (keyPoint: KeyPoint) => void
   deleteKeyPoint: (chapterId: string, keyPointId: string) => void
-  // Ending
-  addEnding: (endingData?: Ending) => void
-  updateEnding: (endingId: string, updates: Partial<Ending>) => void
-  requestDeleteEnding: (endingId: string) => void
-  confirmDeleteEnding: () => void
-  cancelDeleteEnding: () => void
-  deleteEndingConfirmId: string | null
   // AI Generate
   isGenerating: boolean
   handleGenerateOutline: (description?: string, requirements?: string) => Promise<void>
   isGeneratingKeyPoint: boolean
   handleAIGenerateKeyPoint: (keyPointId: string) => void
-  isGeneratingEnding: boolean
-  handleAIGenerateEnding: (endingId: string) => void
   // Undo
   showUndoToast: boolean
   deletedChapter: { chapter: Chapter; index: number } | null
   undoDelete: () => void
   dismissUndoToast: () => void
-  showEndingUndoToast: boolean
-  deletedEnding: { ending: Ending; index: number } | null
-  undoDeleteEnding: () => void
-  dismissEndingUndoToast: () => void
   // Inline editing
   editingChapterId: string | null
   editTitle: string
@@ -91,9 +78,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [showUndoToast, setShowUndoToast] = useState(false)
   const undoTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [deleteEndingConfirmId, setDeleteEndingConfirmId] = useState<string | null>(null)
-  const [deletedEnding, setDeletedEnding] = useState<{ ending: Ending; index: number } | null>(null)
-  const [showEndingUndoToast, setShowEndingUndoToast] = useState(false)
-  const endingUndoTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editSummary, setEditSummary] = useState('')
@@ -129,7 +113,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       number: isEnding ? mainChapters.length + chCount + 1 : chCount + 1,
       title: `第${toChineseNumber(isEnding ? mainChapters.length + chCount + 1 : chCount + 1)}章`,
       summary: '',
-      scenes: [],
       keyPoints: [],
       route: route || 'common',
       endingType: endingType || undefined,
@@ -203,8 +186,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         number: mainCount + i + 1,
         title: `第${toChineseNumber(mainCount + i + 1)}章`,
         summary: '',
-        scenes: [],
-        keyPoints: [],
+          keyPoints: [],
         route: finalRoute,
         endingType: endingType || undefined,
       })
@@ -220,7 +202,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     const kp: KeyPoint = keyPointData || {
       id: `kp-${Date.now()}`,
       text: '新关键点',
-      description: '',
     }
     const chapters = st.project.chapters.map(ch =>
       ch.id === chapterId ? { ...ch, keyPoints: [...ch.keyPoints, kp] } : ch
@@ -260,65 +241,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }, [storeSave])
 
   // ── Ending CRUD ──
-  const addEnding = useCallback((endingData?: Ending) => {
-    const st = useProjectStore.getState()
-    if (!st.project) return
-    const ending: Ending = endingData || {
-      id: `end-${Date.now()}`,
-      type: 'GE',
-      name: '新结局',
-      description: '',
-    }
-    storeSave({ ...st.project, endings: [...(st.project.endings || []), ending] })
-  }, [storeSave])
-
-  const updateEnding = useCallback((endingId: string, updates: Partial<Ending>) => {
-    const st = useProjectStore.getState()
-    if (!st.project || !st.project.endings) return
-    storeSave({
-      ...st.project,
-      endings: st.project.endings.map(e => e.id === endingId ? { ...e, ...updates } : e)
-    })
-  }, [storeSave])
-
-  const requestDeleteEnding = useCallback((endingId: string) => setDeleteEndingConfirmId(endingId), [])
-
-  const confirmDeleteEnding = useCallback(() => {
-    if (!deleteEndingConfirmId) return
-    const st = useProjectStore.getState()
-    if (!st.project?.endings) return
-    const idx = st.project.endings.findIndex(e => e.id === deleteEndingConfirmId)
-    if (idx === -1) return
-    const ending = st.project.endings[idx]
-    storeSave({ ...st.project, endings: st.project.endings.filter(e => e.id !== deleteEndingConfirmId) })
-    setDeletedEnding({ ending, index: idx })
-    setDeleteEndingConfirmId(null)
-    setShowEndingUndoToast(true)
-    if (endingUndoTimeoutRef.current) clearTimeout(endingUndoTimeoutRef.current)
-    endingUndoTimeoutRef.current = setTimeout(() => {
-      setShowEndingUndoToast(false)
-      setTimeout(() => setDeletedEnding(null), 500)
-    }, 5000)
-  }, [deleteEndingConfirmId, storeSave])
-
-  const cancelDeleteEnding = useCallback(() => setDeleteEndingConfirmId(null), [])
-
-  const undoDeleteEnding = useCallback(() => {
-    if (!deletedEnding) return
-    const st = useProjectStore.getState()
-    if (!st.project) return
-    const endings = [...(st.project.endings || [])]
-    endings.splice(deletedEnding.index, 0, deletedEnding.ending)
-    storeSave({ ...st.project, endings })
-    setDeletedEnding(null)
-    setShowEndingUndoToast(false)
-  }, [deletedEnding, storeSave])
-
-  const dismissEndingUndoToast = useCallback(() => {
-    setShowEndingUndoToast(false)
-    setTimeout(() => setDeletedEnding(null), 500)
-  }, [])
-
   // ── AI Generate ──
   const handleGenerateOutline = useCallback(async (_description?: string, _requirements?: string) => {
     // no-op: 章节骨架已自动生成
@@ -327,11 +249,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const handleAIGenerateKeyPoint = useCallback((_keyPointId: string) => {
     setIsGeneratingKeyPoint(true)
     setTimeout(() => setIsGeneratingKeyPoint(false), 1500)
-  }, [])
-
-  const handleAIGenerateEnding = useCallback((_endingId: string) => {
-    setIsGeneratingEnding(true)
-    setTimeout(() => setIsGeneratingEnding(false), 1500)
   }, [])
 
   // ── Inline Editing ──
@@ -367,15 +284,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       deleteConfirmId, addRoute,
       // Key Point
       addKeyPoint, updateKeyPoint, updateKeyPointData, deleteKeyPoint,
-      // Ending
-      addEnding, updateEnding, requestDeleteEnding, confirmDeleteEnding, cancelDeleteEnding,
-      deleteEndingConfirmId,
       // AI
       isGenerating, handleGenerateOutline, isGeneratingKeyPoint, handleAIGenerateKeyPoint,
-      isGeneratingEnding, handleAIGenerateEnding,
       // Undo
       showUndoToast, deletedChapter, undoDelete, dismissUndoToast,
-      showEndingUndoToast, deletedEnding, undoDeleteEnding, dismissEndingUndoToast,
       // Inline edit
       editingChapterId, editTitle, editSummary, setEditTitle, setEditSummary,
       startEditing, saveEdit, cancelEdit,

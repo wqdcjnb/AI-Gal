@@ -7,7 +7,7 @@
  *   保存：组件 → Zustand(dirty) → IndexedDB(即时) → 30s → PATCH /full (version 校验)
  */
 import { create } from 'zustand'
-import type { ProjectData, Character, SavedCombo, SubSection } from '@/app/editor/_lib/types'
+import type { ProjectData, Chapter, Character, SavedCombo, SubSection, AssetItem } from '@/app/editor/_lib/types'
 import { generateChapterSkeleton, toChineseNumber } from '@/app/editor/_lib/utils'
 import { putProject, getProject as idbGetProject } from '../cache/indexeddb-cache'
 
@@ -24,6 +24,7 @@ interface ProjectStore {
   characters: Character[]
   savedCombos: Record<string, SavedCombo[]>
   subSections: Record<string, SubSection[]>
+  assets: AssetItem[]
   version: number
   syncStatus: SyncStatus
   loading: boolean
@@ -36,6 +37,7 @@ interface ProjectStore {
   saveCharacters: (chars: Character[]) => void
   saveCombos: (combos: Record<string, SavedCombo[]>) => void
   saveSubSections: (subs: Record<string, SubSection[]>) => void
+  setAssets: (assets: AssetItem[]) => void
   forceSave: () => Promise<void>
 }
 
@@ -45,6 +47,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   characters: [],
   savedCombos: {},
   subSections: {},
+  assets: [],
   version: 1,
   syncStatus: 'idle',
   loading: false,
@@ -55,9 +58,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   // ── 加载 ──
   async loadProject(id: string) {
     if (get().projectId === id && get().project && get().projectReady) return
-    set({ projectId: id, loading: true, loadingStage: 'init', projectReady: false, subSections: {} })
+    set({ projectId: id, loading: true, loadingStage: 'init', projectReady: false })
 
-    // 1. IndexedDB → 即时渲染
+    // 1. IndexedDB → 仅预热缓存，不提前渲染
     try {
       const cached = await idbGetProject(id)
       if (cached.project) {
@@ -67,18 +70,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           savedCombos: cached.combos || {},
           subSections: cached.subSections || {},
           version: cached.project.version ?? 1,
-          loading: false,
-          loadingStage: 'cache',
-          projectReady: true,
         })
       }
     } catch {}
 
-    // 2. API → 后台刷新
+    // 2. API → 主加载，拿到数据后再渲染
     set({ loadingStage: 'server' })
     try {
       const res = await fetch(`/api/projects/${id}/full`)
       const json = await res.json()
+      console.log('[loadProject] API 结果:', json.success ? '成功' : '失败', json.success ? `chapters:${json.data?.chapters?.length}` : json.message)
       if (json.success && json.data?.project) {
         const api = json.data
         const current = get().project
@@ -94,16 +95,27 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           themeBackground: api.project.theme_background,
           narrativeStructure: api.project.narrative_structure,
           synopsis: api.project.synopsis || '',
-          chapterCount: api.project.chapter_count,
-          chapters: (apiVer > localVer || !current?.chapters?.length)
-            ? (api.chapters || [])
-            : current.chapters,
-          endings: (apiVer > localVer || !current?.endings?.length)
-            ? (api.endings || [])
-            : (current.endings || []),
+          chapters: (() => {
+            const useApi = apiVer > localVer || !current?.chapters?.length || !current.chapters.some((c: Chapter) => c.keyPoints?.length > 0)
+            const base = useApi ? (api.chapters || []) : current.chapters
+            // 始终用 API 的 keyPoints 覆盖本地（保证大纲数据最新）
+            if (api.chapters?.length) {
+              const apiKpMap = new Map(api.chapters.map((c: any) => [c.id, c.keyPoints || []]))
+              return base.map((ch: Chapter) => {
+                const apiKps = apiKpMap.get(ch.id)
+                return apiKps ? { ...ch, keyPoints: apiKps } : ch
+              })
+            }
+            return base
+          })(),
           version: Math.max(apiVer, localVer),
         }
         if (api.characters?.length) set({ characters: api.characters.map((c: any) => ({ ...c, sprites: c.sprites || [] })) })
+        if (api.assets?.length) set({ assets: api.assets.map((a: any) => ({
+          id: a.id, name: a.name, category: a.category, url: a.url,
+          size: a.size || 0, tags: Array.isArray(a.tags) ? a.tags : typeof a.tags === 'string' ? JSON.parse(a.tags || '[]') : [],
+          usageCount: 0, usedIn: [], createdAt: new Date(a.created_at).toISOString(),
+        })) })
         // 只在 API 有数据时才覆盖，避免空数据清掉本地
         if (api.sprite_combos && Object.keys(api.sprite_combos).length > 0) {
           set({ savedCombos: api.sprite_combos })
@@ -140,8 +152,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         set({
           project: {
             id: pid, name: '未命名', emotionStyle: '恋爱喜剧', themeBackground: '校园',
-            narrativeStructure: '分支叙事', synopsis: '', chapterCount: 6,
-            chapters: generateChapterSkeleton('分支叙事', 6), endings: [], version: 1,
+            narrativeStructure: '分支叙事', synopsis: '',
+            chapters: generateChapterSkeleton('分支叙事', 6), version: 1,
           },
           loading: false,
           loadingStage: 'ready' as LoadingStage,
@@ -150,6 +162,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       }
     } else {
       // 已有数据（从 IndexedDB 或 API），确保 projectReady
+      console.log('[loadProject] 完成，projectReady = true')
       set({ loadingStage: 'ready' as LoadingStage, projectReady: true })
     }
   },
@@ -182,7 +195,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ characters: chars }),
-    }).catch(() => {})
+    }).then(r => r.json()).then(j => {
+      if (j.success && j.data?.version) set({ version: j.data.version as number })
+    }).catch(e => { console.error('保存角色失败', e) })
   },
 
   saveCombos(combos: Record<string, SavedCombo[]>) {
@@ -215,6 +230,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const subSectionsArray = Object.entries(subs).flatMap(([chId, ss]) =>
       ss.map(s => ({ ...s, chapterId: chId }))
     )
+    // 防止空数组误删数据库数据
+    if (subSectionsArray.length === 0) return
     fetch(`/api/projects/${id}/full`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -222,6 +239,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }).then(r => r.json()).then(j => {
       if (j.success && j.data?.version) set({ version: j.data.version as number })
     }).catch(e => { console.error('保存小节失败', e) })
+  },
+
+  setAssets(assets: AssetItem[]) {
+    set({ assets })
   },
 
   // ── Ctrl+S / beforeunload ──
@@ -244,13 +265,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           meta: {
             name: project.name, emotion_style: project.emotionStyle,
             theme_background: project.themeBackground, narrative_structure: project.narrativeStructure,
-            synopsis: project.synopsis, chapter_count: project.chapterCount,
+            synopsis: project.synopsis,
           },
           chapters: project.chapters,
-          endings: project.endings || [],
           characters,
           sprite_combos: savedCombos,
-          sub_sections: subSectionsArray,
+          ...(subSectionsArray.length > 0 ? { sub_sections: subSectionsArray } : {}),
         }),
       })
       const json = await res.json()
@@ -298,8 +318,10 @@ function renumberChapters(project: ProjectData): ProjectData {
 }
 
 function ensureChapters(project: ProjectData): ProjectData {
-  if (project.chapters.length > 0) return renumberChapters(project)
-  return { ...project, chapters: generateChapterSkeleton(project.narrativeStructure, project.chapterCount) }
+  if (!project.chapters || project.chapters.length === 0) {
+    return { ...project, chapters: generateChapterSkeleton(project.narrativeStructure || '分支敘事', project.chapters?.length || 6) }
+  }
+  return renumberChapters(project)
 }
 
 // ============================================================
@@ -325,12 +347,11 @@ if (typeof window !== 'undefined') {
     // sendBeacon 发最后一把
     const payload = JSON.stringify({
       version: st.version,
-      meta: { name: st.project.name, emotion_style: st.project.emotionStyle, theme_background: st.project.themeBackground, narrative_structure: st.project.narrativeStructure, synopsis: st.project.synopsis, chapter_count: st.project.chapterCount },
+      meta: { name: st.project.name, emotion_style: st.project.emotionStyle, theme_background: st.project.themeBackground, narrative_structure: st.project.narrativeStructure, synopsis: st.project.synopsis },
       chapters: st.project.chapters,
-      endings: st.project.endings || [],
       characters: st.characters,
       sprite_combos: st.savedCombos,
-      sub_sections: subSectionsArray,
+      ...(subSectionsArray.length > 0 ? { sub_sections: subSectionsArray } : {}),
     })
     try { navigator.sendBeacon(`/api/projects/${st.projectId}/full`, new Blob([payload], { type: 'application/json' })) } catch {}
   })

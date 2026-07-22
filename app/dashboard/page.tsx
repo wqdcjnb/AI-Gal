@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Plus,
   BookOpen,
-  Film,
+  GitBranch,
   Users,
   Clock,
   MoreHorizontal,
@@ -72,10 +72,10 @@ export default function DashboardPage() {
           const apiProjects: GameProject[] = json.data.map((p: any) => ({
             id: p.id, name: p.name,
             style: p.emotion_style, setting: p.theme_background, structure: p.narrative_structure,
-            synopsis: p.synopsis || "", cover_url: p.cover_url, chapter_count: p.chapter_count,
+            synopsis: p.synopsis || "", cover_url: p.cover_url,
             status: p.status,
             created_at: new Date(p.created_at).toISOString(), updated_at: new Date(p.updated_at).toISOString(),
-            chapterCount: p.chapter_count, sceneCount: 0, characterCount: 0,
+            chapterCount: p.chapterCount || 0, characterCount: p.characterCount || 0, routeCount: p.routeCount || 0,
           }))
           setProjects(apiProjects)
         }
@@ -94,7 +94,6 @@ export default function DashboardPage() {
         theme_background: data.setting,
         narrative_structure: data.structure,
         synopsis: data.synopsis,
-        chapter_count: data.chapterCount,
         cover_url: data.coverUrl || null,
       }),
     })
@@ -108,13 +107,12 @@ export default function DashboardPage() {
         structure: data.structure,
         synopsis: data.synopsis,
         cover_url: data.coverDisplayUrl || data.coverUrl || null,
-        chapter_count: data.chapterCount,
         status: 'editing',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         chapterCount: data.chapterCount,
-        sceneCount: 0,
         characterCount: 0,
+        routeCount: 0,
       }
       setProjects([newProject, ...projects])
     }
@@ -367,12 +365,12 @@ function ProjectCard({
             {project.chapterCount ?? 0}章
           </span>
           <span className="flex items-center gap-1">
-            <Film className="h-3 w-3" />
-            {project.sceneCount ?? 0}场景
-          </span>
-          <span className="flex items-center gap-1">
             <Users className="h-3 w-3" />
             {project.characterCount ?? 0}角色
+          </span>
+          <span className="flex items-center gap-1">
+            <GitBranch className="h-3 w-3" />
+            {(project as any).routeCount ?? 0}路线
           </span>
         </div>
 
@@ -722,7 +720,8 @@ function CreateProjectDialog({
               }
               onOpenChange(false);
             }}
-            className="bg-gradient-to-r from-pink-400 to-violet-400 hover:from-pink-500 hover:to-violet-500 text-white shadow-md shadow-pink-200/50"
+            disabled={!gameName.trim() || selectedStyles.length === 0 || !selectedSetting || !selectedStructure}
+            className="bg-gradient-to-r from-pink-400 to-violet-400 hover:from-pink-500 hover:to-violet-500 text-white shadow-md shadow-pink-200/50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Sparkles className="mr-2 h-4 w-4" />
             创建项目

@@ -1,30 +1,46 @@
 'use client'
 
 import { useState } from 'react'
-import { Zap, Plus, X, Trash2 } from 'lucide-react'
+import { Zap, Plus, X, Trash2, GripVertical } from 'lucide-react'
 import type { Trigger, TriggerCondition } from '@/app/editor/_lib/types'
 import { Cascader } from '@/app/editor/_components/chapter/cascader'
 
 // ── 根据 jumpTarget ID 查找显示名称 ──
-function resolveJumpLabel(targetId: string, tree?: { value: string; label: string; children?: { value: string; label: string }[] }[]): string {
+function resolveJumpLabel(targetId: string, tree?: { value: string; label: string; children?: { value: string; label: string; children?: { value: string; label: string }[] }[] }[]): string {
   if (!tree || !targetId) return targetId || '未设置'
-  for (const ch of tree) {
-    if (ch.children) {
-      const found = ch.children.find(c => c.value === targetId)
-      if (found) return `${ch.label.split(' ')[0]} › ${found.label}`
+  for (const route of tree) {
+    if (route.children) {
+      for (const ch of route.children) {
+        if (ch.children) {
+          const found = ch.children.find(s => s.value === targetId)
+          if (found) return `${route.label} › ${ch.label} › ${found.label}`
+        }
+      }
     }
   }
   return targetId
 }
 
 // ── Trigger Card (display) ──
-export function TriggerCard({ trigger, onEdit, subSectionTree }: { trigger: Trigger; onEdit: () => void; subSectionTree?: { value: string; label: string; children?: { value: string; label: string }[] }[] }) {
+export function TriggerCard({ trigger, onEdit, subSectionTree, onDragStart, onDragOver, onDrop }: {
+  trigger: Trigger
+  onEdit: () => void
+  subSectionTree?: { value: string; label: string; children?: { value: string; label: string }[] }[]
+  onDragStart?: (e: React.DragEvent) => void
+  onDragOver?: (e: React.DragEvent) => void
+  onDrop?: (e: React.DragEvent) => void
+}) {
   const choices = trigger.conditions.length
   const jumpLabel = resolveJumpLabel(trigger.jumpTarget, subSectionTree)
   return (
     <div className="group rounded-lg border-2 border-dashed border-cyan-400/50 bg-cyan-50/20 p-3 hover:border-cyan-400 cursor-pointer"
-      onClick={onEdit}>
+      onClick={onEdit}
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}>
       <div className="flex items-center gap-2">
+        <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
         <Zap className="h-4 w-4 text-cyan-500" />
         <span className="rounded bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">触发器</span>
         <span className="text-sm font-medium text-foreground truncate">{trigger.name || '未命名'}</span>

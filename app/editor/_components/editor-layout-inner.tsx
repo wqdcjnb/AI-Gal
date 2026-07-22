@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Play, Download, Check, Loader2, Database, Globe, FileText } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, Database, Globe, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProject } from '@/app/editor/_components/project-provider'
 import { useProjectStore } from '@/lib/state/project-store-zustand'
@@ -131,19 +131,7 @@ export function EditorLayoutInner({ children }: { children: React.ReactNode }) {
           </nav>
 
           {/* Right: Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push(`/preview?id=${projectId}`)}
-              className="flex items-center gap-2 rounded-lg border border-pink-200 bg-white px-4 py-2 text-sm font-medium text-foreground transition-all hover:border-pink-300 hover:shadow-sm"
-            >
-              <Play className="h-4 w-4" />
-              预览
-            </button>
-            <button className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 px-4 py-2 text-sm font-medium text-white shadow-md shadow-pink-200/50 transition-all hover:shadow-lg hover:shadow-pink-300/50">
-              <Download className="h-4 w-4" />
-              导出
-            </button>
-          </div>
+          <div className="flex items-center gap-2" />
         </div>
       </header>
 

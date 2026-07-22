@@ -9,10 +9,6 @@ export function UndoToasts() {
     deletedChapter,
     undoDelete,
     dismissUndoToast,
-    showEndingUndoToast,
-    deletedEnding,
-    undoDeleteEnding,
-    dismissEndingUndoToast,
   } = useProject()
 
   return (
@@ -28,16 +24,6 @@ export function UndoToasts() {
         </div>
       )}
 
-      {/* Ending Undo Toast */}
-      {(showEndingUndoToast || deletedEnding) && deletedEnding && (
-        <div className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 transition-all duration-300 ${showEndingUndoToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 text-white shadow-lg">
-            <span className="text-sm">已删除「{deletedEnding.ending.name}」</span>
-            <button onClick={undoDeleteEnding} className="rounded bg-white/20 px-3 py-1 text-sm font-medium hover:bg-white/30">撤销</button>
-            <button onClick={dismissEndingUndoToast} className="text-white/60 hover:text-white"><X className="h-4 w-4" /></button>
-          </div>
-        </div>
-      )}
     </>
   )
 }

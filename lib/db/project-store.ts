@@ -20,7 +20,6 @@ export interface ProjectRow {
   theme_background: string
   narrative_structure: string
   synopsis: string
-  chapter_count: number
   cover_url: string | null
   status: string
   created_at: number
@@ -33,11 +32,8 @@ export interface ChapterRow {
   number: number
   title: string
   summary: string
-  scenes: string[]                 // JSONB → 自动序列化
   route: string
   ending_type: string | null
-  branch_from: string | null
-  sort_order: number
   created_at: number
   updated_at: number
 }
@@ -46,28 +42,13 @@ export interface KeyPointRow {
   id: string
   chapter_id: string
   text: string
-  description: string | null
   sort_order: number
-}
-
-export interface EndingRow {
-  id: string
-  project_id: string
-  type: string
-  name: string
-  description: string
 }
 
 export interface SubSectionRow {
   id: string
   chapter_id: string
   title: string
-  background: string
-  bgm: string
-  cg_trigger: string | null
-  transition: string
-  is_branch: number
-  branch_from: string | null
   dialogues: any[]                // JSONB → 自动序列化
   triggers: any[]                 // JSONB → 自动序列化
   sort_order: number
@@ -79,12 +60,9 @@ export interface CharacterRow {
   name: string
   color: string
   avatar: string | null
-  personality: string | null
-  description: string | null
   appearance: string[]            // JSONB
   temperament: string[]           // JSONB
   extra_description: string | null
-  sort_order: number
   created_at: number
   updated_at: number
 }
@@ -117,13 +95,6 @@ export interface AssetRow {
   name: string
   category: string
   url: string
-  file_id: string | null
-  tags: string[]                  // JSONB
-  status: string
-  has_diff: number
-  diff_count: number
-  plot_node: string | null
-  plot_description: string | null
   created_at: number
 }
 
@@ -168,7 +139,7 @@ export async function listChapters(projectId: string) {
   return rdb.from("chapters")
     .select("*")
     .eq("project_id", projectId)
-    .order("sort_order")
+    .order("number")
 }
 
 export async function getChapter(chapterId: string) {
@@ -213,29 +184,10 @@ export async function listKeyPoints(chapterId: string) {
 }
 
 export async function saveKeyPoints(chapterId: string, keyPoints: KeyPointRow[]) {
+  if (keyPoints.length === 0) return { data: [], error: null }
+  // upsert: 先删后插，保证幂等
   await rdb.from("key_points").delete().eq("chapter_id", chapterId)
-  if (keyPoints.length > 0) {
-    return rdb.from("key_points").insert(keyPoints)
-  }
-  return { data: [], error: null }
-}
-
-// ============================================================
-// Endings
-// ============================================================
-
-export async function listEndings(projectId: string) {
-  return rdb.from("endings")
-    .select("*")
-    .eq("project_id", projectId)
-}
-
-export async function saveEndings(projectId: string, endings: EndingRow[]) {
-  await rdb.from("endings").delete().eq("project_id", projectId)
-  if (endings.length > 0) {
-    return rdb.from("endings").insert(endings)
-  }
-  return { data: [], error: null }
+  return rdb.from("key_points").insert(keyPoints)
 }
 
 // ============================================================
@@ -257,12 +209,9 @@ export async function getSubSection(id: string) {
 }
 
 export async function saveSubSections(chapterId: string, sections: SubSectionRow[]) {
-  // 先删后插，调用方（PATCH /full）保证传入该章节全部小节
+  if (sections.length === 0) return { data: [], error: null }
   await rdb.from("sub_sections").delete().eq("chapter_id", chapterId)
-  if (sections.length > 0) {
-    return rdb.from("sub_sections").insert(sections)
-  }
-  return { data: [], error: null }
+  return rdb.from("sub_sections").insert(sections)
 }
 
 /** 安全 upsert 单个小节（不会删除同章节其他小节），供 /api/subsections 使用 */
@@ -286,7 +235,7 @@ export async function listCharacters(projectId: string) {
   return rdb.from("characters")
     .select("*")
     .eq("project_id", projectId)
-    .order("sort_order")
+    .order("created_at")
 }
 
 export async function getCharacter(id: string) {
@@ -311,11 +260,9 @@ export async function deleteCharacter(id: string) {
 }
 
 export async function saveCharacters(projectId: string, characters: CharacterRow[]) {
+  if (characters.length === 0) return { data: [], error: null }
   await rdb.from("characters").delete().eq("project_id", projectId)
-  if (characters.length > 0) {
-    return rdb.from("characters").insert(characters)
-  }
-  return { data: [], error: null }
+  return rdb.from("characters").insert(characters)
 }
 
 // ============================================================
@@ -393,7 +340,6 @@ export async function deleteAsset(id: string) {
 export interface FullProject {
   project: ProjectRow
   chapters: ChapterRow[]
-  endings: EndingRow[]
   characters: (CharacterRow & { sprites: SpriteRow[]; combos: SpriteComboRow[] })[]
   assets: AssetRow[]
 }
@@ -401,10 +347,9 @@ export interface FullProject {
 /** 一次性加载项目所有数据（并行查询） */
 export async function loadFullProject(projectId: string): Promise<{ data: FullProject | null; error: any }> {
   try {
-    const [projRes, chRes, endRes, charRes, assetRes] = await Promise.all([
+    const [projRes, chRes, charRes, assetRes] = await Promise.all([
       getProject(projectId),
       listChapters(projectId),
-      listEndings(projectId),
       listCharacters(projectId),
       listAssets(projectId),
     ])
@@ -428,7 +373,6 @@ export async function loadFullProject(projectId: string): Promise<{ data: FullPr
       data: {
         project: projRes.data,
         chapters: chRes.data || [],
-        endings: endRes.data || [],
         characters: charactersWithDetails,
         assets: assetRes.data || [],
       },
