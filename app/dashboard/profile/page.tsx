@@ -132,9 +132,7 @@ export default function ProfilePage() {
     if (!file) return
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) return
     if (file.size > MAX_AVATAR_SIZE) return
-    const reader = new FileReader()
-    reader.onload = () => setCropImage(reader.result as string)
-    reader.readAsDataURL(file)
+    setCropImage(URL.createObjectURL(file))
     if (avatarInputRef.current) avatarInputRef.current.value = ""
   }
 

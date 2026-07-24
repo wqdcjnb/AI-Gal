@@ -38,7 +38,7 @@ export async function uploadImage(folder: ImageFolder, file: File): Promise<{ cd
 
   const buffer = Buffer.from(await file.arrayBuffer())
   const ext = file.type.split("/")[1] || "png"
-  const cloudPath = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const cloudPath = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
 
   const result = await uploadToPGStorage({
     cloudPath,
@@ -83,7 +83,7 @@ export async function handleImageUpload(folder: ImageFolder, requestOrFormData: 
 
     const buffer = Buffer.from(await file.arrayBuffer())
     const ext = file.type.split("/")[1] || "png"
-    const cloudPath = `${uid}_${Date.now()}.${ext}`
+    const cloudPath = `${folder}/${uid}_${Date.now()}.${ext}`
 
     const result = await uploadToPGStorage({
       cloudPath,

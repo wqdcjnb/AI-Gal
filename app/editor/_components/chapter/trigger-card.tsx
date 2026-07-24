@@ -22,25 +22,21 @@ function resolveJumpLabel(targetId: string, tree?: { value: string; label: strin
 }
 
 // ── Trigger Card (display) ──
-export function TriggerCard({ trigger, onEdit, subSectionTree, onDragStart, onDragOver, onDrop }: {
+export function TriggerCard({ trigger, onEdit, subSectionTree, onGripDown, ...rest }: {
   trigger: Trigger
   onEdit: () => void
   subSectionTree?: { value: string; label: string; children?: { value: string; label: string }[] }[]
-  onDragStart?: (e: React.DragEvent) => void
-  onDragOver?: (e: React.DragEvent) => void
-  onDrop?: (e: React.DragEvent) => void
+  onGripDown?: (e: React.PointerEvent) => void
+  [key: string]: any
 }) {
   const choices = trigger.conditions.length
   const jumpLabel = resolveJumpLabel(trigger.jumpTarget, subSectionTree)
   return (
     <div className="group rounded-lg border-2 border-dashed border-cyan-400/50 bg-cyan-50/20 p-3 hover:border-cyan-400 cursor-pointer"
       onClick={onEdit}
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}>
+      {...rest}>
       <div className="flex items-center gap-2">
-        <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
+        <span className="cursor-grab touch-none text-muted-foreground/30 hover:text-muted-foreground" onPointerDown={e => { e.stopPropagation(); onGripDown?.(e) }}><GripVertical className="h-4 w-4" /></span>
         <Zap className="h-4 w-4 text-cyan-500" />
         <span className="rounded bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">触发器</span>
         <span className="text-sm font-medium text-foreground truncate">{trigger.name || '未命名'}</span>

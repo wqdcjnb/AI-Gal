@@ -14,7 +14,13 @@ import {
   deleteProject,
   listChapters,
   listCharacters,
+  getProject,
+  listSprites,
+  listSpriteCombos,
+  listAssets,
 } from "@/lib/db/project-store"
+import { rdb } from "@/lib/cloudbase/cloudbase"
+import { deleteFromStorage } from "@/lib/storage/pg-storage"
 
 const COOKIE_NAME = "cloudbase_token"
 
@@ -137,6 +143,52 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url)
   const id = searchParams.get("id")
   if (!id) return NextResponse.json({ success: false, message: "缺少项目 ID" }, { status: 400 })
+
+  // 删 DB 前收集所有关联文件 URL，清理云存储
+  try {
+    const [projRes, assetRes, charRes] = await Promise.all([
+      getProject(id),
+      listAssets(id),
+      listCharacters(id),
+    ])
+    const urls: string[] = []
+
+    // 项目封面
+    if (projRes.data?.cover_url) urls.push(projRes.data.cover_url)
+
+    // 素材文件
+    for (const a of (assetRes.data || [])) {
+      if ((a as any).url) urls.push((a as any).url)
+    }
+
+    // 角色立绘 + 立绘组合
+    for (const ch of (charRes.data || [])) {
+      const { data: sprites } = await listSprites(ch.id)
+      for (const s of (sprites || [])) {
+        if ((s as any).url) urls.push((s as any).url)
+      }
+      const { data: combos } = await listSpriteCombos(ch.id)
+      for (const cm of (combos || [])) {
+        if ((cm as any).url) urls.push((cm as any).url)
+      }
+    }
+
+    // 语音参考音频 + 生成音频
+    const { data: voiceProfiles } = await rdb.from("voice_profiles").select("ref_audio_url").eq("project_id", id)
+    for (const vp of (voiceProfiles || [])) {
+      if ((vp as any).ref_audio_url) urls.push((vp as any).ref_audio_url)
+    }
+    const { data: generations } = await rdb.from("voice_generations").select("audio_url").eq("project_id", id)
+    for (const g of (generations || [])) {
+      if ((g as any).audio_url) urls.push((g as any).audio_url)
+    }
+
+    // 批量删云存储文件
+    await Promise.all(urls.map(u => deleteFromStorage(u)))
+  } catch (e) {
+    console.error("清理存储文件失败:", e)
+    // 不阻塞删除，继续删 DB
+  }
 
   const { error } = await deleteProject(id)
   if (error) return NextResponse.json({ success: false, message: "删除失败" }, { status: 500 })

@@ -12,6 +12,7 @@ import {
   saveSubSections, saveKeyPoints, saveCharacters, saveSpriteCombos,
   saveSprites,
 } from "@/lib/db/project-store"
+import { deleteFromStorage } from "@/lib/storage/pg-storage"
 
 const COOKIE_NAME = "cloudbase_token"
 
@@ -117,6 +118,7 @@ export async function GET(
         appearance: typeof c.appearance === 'string' ? JSON.parse(c.appearance || '[]') : (c.appearance || []),
         temperament: typeof c.temperament === 'string' ? JSON.parse(c.temperament || '[]') : (c.temperament || []),
         extraDescription: c.extra_description,
+        voiceProfileId: c.voice_profile_id || null,
       })),
       sprite_combos: spriteCombos,
       sub_sections: subSections,
@@ -159,15 +161,15 @@ export async function PATCH(
       }))
       await saveChapters(id, chapters)
 
-      // key_points: saveKeyPoints 内部有空数组守卫，不会误删
-      for (const ch of body.chapters) {
-        await saveKeyPoints(ch.id, (ch.keyPoints || []).map((kp: any, i: number) => ({
+      // key_points: 并行保存所有章节
+      await Promise.all(body.chapters.map((ch: any) =>
+        saveKeyPoints(ch.id, (ch.keyPoints || []).map((kp: any, i: number) => ({
           id: kp.id,
           chapter_id: ch.id,
           text: kp.text || '',
           sort_order: i,
         })))
-      }
+      ))
     }
 
     // 保存小节（按 chapter_id 分组后逐章写入）
@@ -185,32 +187,38 @@ export async function PATCH(
           sort_order: sub.sort_order ?? 0,
         })
       }
-      for (const [cid, subs] of Object.entries(byChapter)) {
-        await saveSubSections(cid, subs)
-      }
+      await Promise.all(Object.entries(byChapter).map(([cid, subs]) =>
+        saveSubSections(cid, subs)
+      ))
     }
 
-    // 保存立绘组合
+    // 并行保存立绘组合
     if (body.sprite_combos) {
-      for (const [characterId, combos] of Object.entries(body.sprite_combos)) {
-        if (Array.isArray(combos)) {
-          await saveSpriteCombos(characterId, combos.map((c: any) => ({
-            id: c.id,
-            character_id: characterId,
-            sprite_id: c.spriteId || null,
-            expression_id: c.expressionId || null,
-            outfit_id: c.outfitId || null,
-            pose_id: c.poseId || null,
-            name: c.name || '',
-            url: c.url || null,
-          })))
+      await Promise.all(Object.entries(body.sprite_combos).map(async ([characterId, combos]) => {
+        if (!Array.isArray(combos)) return
+        const { data: oldCombos } = await listSpriteCombos(characterId)
+        const oldComboIds = new Set((oldCombos || []).map((oc: any) => oc.id))
+        const newComboIds = new Set((combos as any[]).map((c: any) => c.id))
+        for (const oc of (oldCombos || [])) {
+          if (!newComboIds.has((oc as any).id) && (oc as any).url) {
+            deleteFromStorage((oc as any).url).catch(() => {})
+          }
         }
-      }
+        await saveSpriteCombos(characterId, combos.map((c: any) => ({
+          id: c.id,
+          character_id: characterId,
+          sprite_id: c.spriteId || null,
+          expression_id: c.expressionId || null,
+          outfit_id: c.outfitId || null,
+          pose_id: c.poseId || null,
+          name: c.name || '',
+          url: c.url || null,
+        })))
+      }))
     }
 
     // 保存角色 + 立绘
     if (body.characters) {
-      console.log('[PATCH /full] 保存角色, count:', body.characters.length)
       const chars = body.characters.map((c: any) => ({
         id: c.id,
         project_id: id,
@@ -220,27 +228,35 @@ export async function PATCH(
         appearance: JSON.stringify(c.appearance || []),
         temperament: JSON.stringify(c.temperament || []),
         extra_description: c.extraDescription || null,
+        voice_profile_id: c.voiceProfileId || null,
         created_at: c.created_at || Date.now(),
         updated_at: Date.now(),
       }))
-      const { error } = await saveCharacters(id, chars)
-      console.log('[PATCH /full] saveCharacters 结果:', error ? error.message : '成功')
+      await saveCharacters(id, chars)
 
-      // 提取 sprites 保存到独立表
-      for (const c of body.characters) {
-        if (c.sprites?.length) {
-          await saveSprites(c.id, c.sprites.map((s: any) => ({
-            id: s.id,
-            character_id: c.id,
-            name: s.name || '',
-            type: s.type || 'base',
-            frame_type: s.frameType || null,
-            url: s.url || '',
-            tags: JSON.stringify(s.tags || []),
-            sort_order: 0,
-          })))
+      // 并行处理所有角色的 sprites（清理 + 保存）
+      await Promise.all(body.characters.map(async (c: any) => {
+        const { data: oldSprites } = await listSprites(c.id)
+        const oldIds = new Set((oldSprites || []).map((s: any) => s.id))
+        const newIds = new Set((c.sprites || []).map((s: any) => s.id))
+        // 后台清理被移除的立绘文件（不阻塞）
+        for (const os of (oldSprites || [])) {
+          if (!newIds.has(os.id) && os.url) {
+            deleteFromStorage(os.url).catch(() => {})
+          }
         }
-      }
+
+        await saveSprites(c.id, (c.sprites || []).map((s: any) => ({
+          id: s.id,
+          character_id: c.id,
+          name: s.name || '',
+          type: s.type || 'base',
+          frame_type: s.frameType || null,
+          url: s.url || '',
+          tags: JSON.stringify(s.tags || []),
+          sort_order: 0,
+        })))
+      }))
     }
 
     // 保存元数据

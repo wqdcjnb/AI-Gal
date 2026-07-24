@@ -3,6 +3,7 @@
  * 图片存入 CloudBase 云存储，数据库存 CDN 永久 URL
  */
 import { handleImageUpload } from "@/lib/storage/image-upload"
+import { deleteFromStorage } from "@/lib/storage/pg-storage"
 import { parseAccessToken } from "@/lib/auth/token"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
@@ -27,8 +28,11 @@ export async function POST(request: Request) {
       const json: any = await uploadResponse.json()
       const cdnUrl = json?.data?.cdnUrl
       if (cdnUrl) {
+        // 删除旧头像
+        const prev = await getUser(uid)
+        if (prev?.avatar_url) deleteFromStorage(prev.avatar_url).catch(e => console.error("清理头像失败:", e))
         const email = parsed?.email || uid
-        if (!await getUser(uid)) await createUser(uid, email)
+        if (!prev) await createUser(uid, email)
         await updateUser(uid, { avatar_url: cdnUrl })
         return NextResponse.json({ success: true, data: { avatarUrl: cdnUrl } })
       }

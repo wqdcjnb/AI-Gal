@@ -62,7 +62,7 @@ const SettingsBlock = ({ show, children }: { show: boolean; children: React.Reac
   )
 }
 
-export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionIds = [], onDragStart, onDragOver, onDrop }: DialogueCardProps) {
+export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionIds = [], onGripDown, 'data-card': dataCard, 'data-card-idx': dataCardIdx, style }: DialogueCardProps & { 'data-card'?: any; 'data-card-idx'?: any; style?: any }) {
   const [showSettings, setShowSettings] = useState(false)
   const [choiceCollapsed, setChoiceCollapsed] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
@@ -73,7 +73,7 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
   const seOptions = useSeOptions()
   const assetOptions = useAssetOptions()
 
-  const hasSettings = dialogue.spriteExpression || dialogue.bgmChange || dialogue.soundEffect ||
+  const hasSettings = dialogue.spriteExpression || dialogue.bgmChange ||
     dialogue.cgTrigger
 
   // ── Scene ──
@@ -82,9 +82,9 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
       <>
         <div className="group rounded-lg border-2 border-dashed border-emerald-400/50 bg-emerald-50/20 p-3 hover:border-emerald-400 cursor-pointer"
           onClick={() => setScenePanelOpen(true)}
-          draggable onDragStart={(e) => onDragStart?.(e, index)} onDragOver={onDragOver} onDrop={(e) => onDrop?.(e, index)}>
+          data-card={dataCard} data-card-idx={dataCardIdx} style={style}>
           <div className="flex items-center gap-2 mb-2">
-            <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
+            <span className="cursor-grab touch-none text-muted-foreground/30 hover:text-muted-foreground" onPointerDown={e => { e.stopPropagation(); onGripDown?.(e) }}><GripVertical className="h-4 w-4" /></span>
             <ImageIcon className="h-4 w-4 text-emerald-500" />
             <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">场景</span>
             <div className="flex-1" />
@@ -92,12 +92,13 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             {dialogue.backgroundChange && <span className="rounded bg-emerald-50 px-1.5 py-0.5">🖼️ {dialogue.backgroundChange}</span>}
             {dialogue.bgmChange && <span className="rounded bg-blue-50 px-1.5 py-0.5">🎵 {dialogue.bgmChange}</span>}
+            {dialogue.soundEffect && <span className="rounded bg-green-50 px-1.5 py-0.5">🔊 {dialogue.soundEffect}</span>}
             {dialogue.cgTrigger && <span className="rounded bg-amber-50 px-1.5 py-0.5">🎬 {dialogue.cgTrigger}</span>}
           </div>
         </div>
         {scenePanelOpen && (
           <SceneEditPanel dialogue={dialogue} onUpdate={onUpdate} onDelete={onDelete} onClose={() => setScenePanelOpen(false)}
-            bgOptions={assetOptions.bg} bgmOptions={assetOptions.bgm} cgOptions={assetOptions.cg} />
+            bgOptions={assetOptions.bg} bgmOptions={assetOptions.bgm} cgOptions={assetOptions.cg} seOptions={seOptions} />
         )}
       </>
     )
@@ -109,23 +110,16 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
       <>
         <div className="group rounded-lg border border-border bg-muted/30 p-3 hover:border-pink-200 cursor-pointer"
           onClick={() => setNarrationPanelOpen(true)}
-          draggable onDragStart={(e) => onDragStart?.(e, index)} onDragOver={onDragOver} onDrop={(e) => onDrop?.(e, index)}>
+          data-card={dataCard} data-card-idx={dataCardIdx} style={style}>
           <div className="flex items-center gap-2 mb-2">
-            <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
+            <span className="cursor-grab touch-none text-muted-foreground/30 hover:text-muted-foreground" onPointerDown={e => { e.stopPropagation(); onGripDown?.(e) }}><GripVertical className="h-4 w-4" /></span>
             <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{dialogue.characterName || '旁白'}</span>
             <span className="text-xs text-muted-foreground">#{index + 1}</span>
             <IndicatorBadges dialogue={dialogue} />
             <div className="flex-1" />
-            <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings) }}
-              className={`rounded p-1 text-xs transition-colors ${hasSettings ? 'text-pink-500' : 'text-muted-foreground hover:text-pink-400'}`}>
-              <Settings className="h-3 w-3" />
-            </button>
           </div>
           <p className="text-sm italic text-muted-foreground line-clamp-2">{dialogue.content}</p>
         </div>
-        <SettingsBlock show={showSettings}>
-          <PerfSettings dialogue={dialogue} onUpdate={onUpdate} seOptions={seOptions} />
-        </SettingsBlock>
         {narrationPanelOpen && (
           <NarrationEditPanel
             dialogue={dialogue}
@@ -146,9 +140,9 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
       <>
         <div className="group rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/50 p-3 hover:border-amber-400"
           onClick={() => setPanelOpen(true)}
-          draggable onDragStart={(e) => onDragStart?.(e, index)} onDragOver={onDragOver} onDrop={(e) => onDrop?.(e, index)}>
+          data-card={dataCard} data-card-idx={dataCardIdx} style={style}>
           <div className="flex items-center gap-2 cursor-pointer">
-            <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
+            <span className="cursor-grab touch-none text-muted-foreground/30 hover:text-muted-foreground" onPointerDown={e => { e.stopPropagation(); onGripDown?.(e) }}><GripVertical className="h-4 w-4" /></span>
             <HelpCircle className="h-4 w-4 text-amber-600" />
             <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">{dialogue.content || '选择'}</span>
             <span className="text-xs text-muted-foreground">#{index + 1}</span>
@@ -182,9 +176,9 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
     <>
       <div className="group rounded-lg border border-border bg-card p-3 hover:border-pink-200 cursor-pointer"
         onClick={() => setDialoguePanelOpen(true)}
-        draggable onDragStart={(e) => onDragStart?.(e, index)} onDragOver={onDragOver} onDrop={(e) => onDrop?.(e, index)}>
+        data-card={dataCard} data-card-idx={dataCardIdx} style={style}>
         <div className="flex items-center gap-2 mb-2">
-          <span className="cursor-grab text-muted-foreground/30 hover:text-muted-foreground" onClick={e => e.stopPropagation()}><GripVertical className="h-4 w-4" /></span>
+          <span className="cursor-grab touch-none text-muted-foreground/30 hover:text-muted-foreground" onPointerDown={e => { e.stopPropagation(); onGripDown?.(e) }}><GripVertical className="h-4 w-4" /></span>
           {char && (
             <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white text-xs font-medium overflow-hidden" style={{ backgroundColor: char.color }}>
               {char.avatar ? <img src={char.avatar} alt="" className="h-full w-full object-cover" /> : char.name[0]}
@@ -202,30 +196,86 @@ export function DialogueCard({ dialogue, index, onUpdate, onDelete, subSectionId
         <p className="text-sm text-foreground">{dialogue.content}</p>
       </div>
       <SettingsBlock show={showSettings}>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground">🎭 立绘</label>
-            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.spriteId || ''}
-              onChange={(e) => onUpdate?.({ ...dialogue, spriteId: e.target.value || undefined })}>
-              <option value="">无</option>
-              {charCombos.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+        <div className="grid grid-cols-2 gap-4">
+          {/* 左：立绘 */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">🎭 立绘</label>
+            {(() => {
+              const list = dialogue.spriteList?.length ? dialogue.spriteList : [{ spriteId: dialogue.spriteId || '', position: dialogue.spritePosition || 'center' }]
+              return list.map((s: any, i: number) => (
+                <div key={i} className="flex gap-1.5 items-center">
+                  <select className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs"
+                    value={s.spriteId || ''}
+                    onChange={(e) => {
+                      const newList = [...list]
+                      newList[i] = { ...newList[i], spriteId: e.target.value }
+                      onUpdate?.({ ...dialogue, spriteList: newList.filter(x => x.spriteId) })
+                    }}>
+                    <option value="">无</option>
+                    {charCombos.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <select className="w-16 rounded border border-border bg-background px-1 py-1 text-xs"
+                    value={s.position || 'center'}
+                    onChange={(e) => {
+                      const newList = [...list]
+                      newList[i] = { ...newList[i], position: e.target.value as 'left' | 'center' | 'right' }
+                      onUpdate?.({ ...dialogue, spriteList: newList.filter(x => x.spriteId) })
+                    }}>
+                    <option value="left">左</option>
+                    <option value="center">中</option>
+                    <option value="right">右</option>
+                  </select>
+                  <button
+                    onClick={() => {
+                      const newList = list.filter((_: any, j: number) => j !== i)
+                      onUpdate?.({ ...dialogue, spriteList: newList })
+                    }}
+                    className="shrink-0 w-5 h-5 rounded text-muted-foreground hover:bg-red-50 hover:text-red-400 flex items-center justify-center">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))
+            })()}
+            <button
+              onClick={() => {
+                const list = dialogue.spriteList?.length ? [...dialogue.spriteList] : [{ spriteId: dialogue.spriteId || '', position: dialogue.spritePosition || 'center' }]
+                list.push({ spriteId: '', position: 'center' })
+                onUpdate?.({ ...dialogue, spriteList: list })
+              }}
+              className="flex items-center justify-center gap-1 text-xs text-pink-500 hover:text-pink-600 w-full">
+              <Plus className="h-3 w-3" />添加立绘
+            </button>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">📍 立绘位置</label>
-            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs"
-              value={dialogue.spritePosition || 'center'}
-              onChange={(e) => onUpdate?.({ ...dialogue, spritePosition: e.target.value as any || undefined })}>
-              <option value="left">左</option><option value="center">中</option><option value="right">右</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">🔊 音效</label>
-            <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.soundEffect || ''}
-              onChange={(e) => onUpdate?.({ ...dialogue, soundEffect: e.target.value || undefined })}>
-              <option value="">无</option>
-              {seOptions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-            </select>
+
+          {/* 右：语音 */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground">情绪</label>
+                <select className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 text-xs"
+                  value={dialogue.emotion || 'normal'}
+                  onChange={(e) => onUpdate?.({ ...dialogue, emotion: e.target.value as any || undefined })}>
+                  <option value="normal">正常</option>
+                  <option value="happy">开心</option>
+                  <option value="sad">悲伤</option>
+                  <option value="angry">生气</option>
+                  <option value="surprised">惊喜</option>
+                  <option value="shy">害羞</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">语速</label>
+                <select className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 text-xs"
+                  value={dialogue.speed || 'normal'}
+                  onChange={(e) => onUpdate?.({ ...dialogue, speed: e.target.value as any || undefined })}>
+                  <option value="slow">慢</option>
+                  <option value="semi-slow">偏慢</option>
+                  <option value="normal">正常</option>
+                  <option value="semi-fast">偏快</option>
+                  <option value="fast">快</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       </SettingsBlock>
@@ -396,35 +446,22 @@ function ChoicePanel({ dialogue, onUpdate, onClose, onDelete }: { dialogue: any;
 function IndicatorBadges({ dialogue }: { dialogue: DialogueCardProps['dialogue'] }) {
   return (
     <div className="flex items-center gap-1">
-      {dialogue.soundEffect && <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] text-green-600">🔊</span>}
-    </div>
-  )
-}
-
-// ── Performance settings ──
-function PerfSettings({ dialogue, onUpdate, seOptions }: { dialogue: any; onUpdate?: any; seOptions: { id: string; name: string }[] }) {
-  return (
-    <div>
-      <label className="text-xs text-muted-foreground">🔊 音效</label>
-      <select className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs" value={dialogue.soundEffect || ''}
-        onChange={(e) => onUpdate?.({ ...dialogue, soundEffect: e.target.value || undefined })}>
-        <option value="">无</option>
-        {seOptions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-      </select>
     </div>
   )
 }
 
 // ── Scene Edit Panel ──
-function SceneEditPanel({ dialogue, onUpdate, onClose, onDelete, bgOptions, bgmOptions, cgOptions }: {
+function SceneEditPanel({ dialogue, onUpdate, onClose, onDelete, bgOptions, bgmOptions, cgOptions, seOptions }: {
   dialogue: any; onUpdate?: any; onClose: () => void; onDelete?: () => void
   bgOptions: { id: string; name: string }[]
   bgmOptions: { id: string; name: string }[]
   cgOptions: { id: string; name: string }[]
+  seOptions: { id: string; name: string }[]
 }) {
   const [bg, setBg] = useState(dialogue.backgroundChange || '')
   const [bgm, setBgm] = useState(dialogue.bgmChange || '')
   const [cg, setCg] = useState(dialogue.cgTrigger || '')
+  const [se, setSe] = useState(dialogue.soundEffect || '')
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
@@ -438,19 +475,24 @@ function SceneEditPanel({ dialogue, onUpdate, onClose, onDelete, bgOptions, bgmO
           <option value="">无</option>
           {bgOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
         </select>
+        <label className="text-[10px] text-muted-foreground mb-1 block">🎬 CG</label>
+        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3" value={cg} onChange={e => setCg(e.target.value)}>
+          <option value="">无</option>
+          {cgOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+        </select>
         <label className="text-[10px] text-muted-foreground mb-1 block">🎵 BGM</label>
         <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-3" value={bgm} onChange={e => setBgm(e.target.value)}>
           <option value="">无</option>
           {bgmOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
         </select>
-        <label className="text-[10px] text-muted-foreground mb-1 block">🎬 CG</label>
-        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-4" value={cg} onChange={e => setCg(e.target.value)}>
+        <label className="text-[10px] text-muted-foreground mb-1 block">🔊 音效</label>
+        <select className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-4" value={se} onChange={e => setSe(e.target.value)}>
           <option value="">无</option>
-          {cgOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+          {seOptions.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
         </select>
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 rounded-lg border border-border py-2 text-sm">取消</button>
-          <button onClick={() => { onUpdate?.({ ...dialogue, backgroundChange: bg || undefined, bgmChange: bgm || undefined, cgTrigger: cg || undefined }); onClose() }}
+          <button onClick={() => { onUpdate?.({ ...dialogue, backgroundChange: bg || undefined, bgmChange: bgm || undefined, cgTrigger: cg || undefined, soundEffect: se || undefined }); onClose() }}
             className="flex-1 rounded-lg bg-gradient-to-r from-pink-500 to-violet-500 py-2 text-sm text-white font-medium">保存</button>
         </div>
       </div>

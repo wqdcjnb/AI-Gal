@@ -48,7 +48,12 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
   const [showNewTrigger, setShowNewTrigger] = useState(false)
   const [showNewScene, setShowNewScene] = useState(false)
   const [editingTrigger, setEditingTrigger] = useState<Trigger | null>(null)
-  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const dragIdxRef = useRef<number | null>(null)
+  const [dragGhostY, setDragGhostY] = useState(0)
+  const dragCardH = useRef(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const scrollTimer = useRef<number>(0)
+  const dragMoved = useRef(false)
   const assetOptions = useAssetOptions()
 
   // ═══════════════════════════════════════════════
@@ -124,27 +129,76 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
     }))
 
   // ── Drag handlers ──
-  const handleDragStart = (e: React.DragEvent, idx: number) => {
-    setDragIdx(idx)
-    e.dataTransfer.effectAllowed = 'move'
+  // Pointer Events 拖拽
+  const handleGripDown = (e: React.PointerEvent, idx: number) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    dragMoved.current = false
+    const card = (e.target as HTMLElement).closest('[data-card]') as HTMLElement
+    if (card) dragCardH.current = card.getBoundingClientRect().height
+    dragIdxRef.current = idx
+    setDragGhostY(e.clientY - dragCardH.current / 2)
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    document.addEventListener('pointermove', onDocMove)
+    document.addEventListener('pointerup', onDocUp)
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-
-  const handleDrop = (e: React.DragEvent, dropIdx: number) => {
-    e.preventDefault()
-    if (dragIdx === null || dragIdx === dropIdx || dragIdx >= timeline.length) return
-    const next = [...timeline]
-    const [moved] = next.splice(dragIdx, 1)
-    if (moved) {
-      next.splice(dropIdx, 0, moved)
-      setTimeline(next)
-      persist(next)
+  const onDocMove = (e: PointerEvent) => {
+    if (dragIdxRef.current === null) return
+    dragMoved.current = true
+    setDragGhostY(e.clientY - dragCardH.current / 2)
+    // 边缘自动滚动
+    const scroller = document.querySelector('[data-scroll-container]') as HTMLElement | null
+    if (scroller) {
+      const rect = scroller.getBoundingClientRect()
+      const y = e.clientY - rect.top
+      const edge = 80
+      let speed = 0
+      if (y < edge) speed = -(edge - y) / 3
+      else if (y > rect.height - edge) speed = (y - rect.height + edge) / 3
+      if (speed !== 0) {
+        if (!scrollTimer.current) {
+          const tick = () => {
+            scroller.scrollBy({ top: speed, behavior: 'auto' })
+            scrollTimer.current = requestAnimationFrame(tick)
+          }
+          scrollTimer.current = requestAnimationFrame(tick)
+        }
+      } else if (scrollTimer.current) {
+        cancelAnimationFrame(scrollTimer.current)
+        scrollTimer.current = 0
+      }
     }
-    setDragIdx(null)
+  }
+
+  const onDocUp = (e: PointerEvent) => {
+    document.removeEventListener('pointermove', onDocMove)
+    document.removeEventListener('pointerup', onDocUp)
+    if (scrollTimer.current) { cancelAnimationFrame(scrollTimer.current); scrollTimer.current = 0 }
+    const di = dragIdxRef.current
+    dragIdxRef.current = null
+    if (di === null) return
+    if (containerRef.current) {
+      const cards = Array.from(containerRef.current.querySelectorAll('[data-card]'))
+      let dropIdx = di
+      for (let i = 0; i < cards.length; i++) {
+        const r = cards[i].getBoundingClientRect()
+        if (e.clientY < r.top + r.height / 2) { dropIdx = i; break }
+        dropIdx = i + 1
+      }
+      if (dropIdx > di) dropIdx = Math.max(0, dropIdx - 1)
+      dropIdx = Math.min(timeline.length - 1, Math.max(0, dropIdx))
+      if (dropIdx !== di && di < timeline.length && dropIdx < timeline.length) {
+        const next = [...timeline]
+        const [moved] = next.splice(di, 1)
+        if (moved) {
+          next.splice(dropIdx, 0, moved)
+          setTimeline(next)
+          persist(next)
+        }
+      }
+    }
+    setDragGhostY(0)
   }
 
   // ── CRUD helpers ──
@@ -253,14 +307,15 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
 
       {isExpanded && (
         <div className="border-t border-border bg-muted/20 p-4">
-          <div className="space-y-3">
+          <div className="space-y-3" ref={containerRef} onClickCapture={(e) => { if (dragMoved.current) { e.stopPropagation(); dragMoved.current = false } }}>
             {timeline.map((item, ti) => {
+              const isDragging = dragIdxRef.current === ti
               if (item.kind === 'trigger') {
                 return (
                   <TriggerCard key={item.data.id} trigger={item.data} onEdit={() => setEditingTrigger(item.data)} subSectionTree={subSectionTree}
-                    onDragStart={(e) => handleDragStart(e, ti)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, ti)}
+                    data-card data-card-idx={ti}
+                    style={isDragging ? { opacity: 0.3 } : undefined}
+                    onGripDown={(e) => handleGripDown(e, ti)}
                   />
                 )
               }
@@ -269,7 +324,9 @@ export function SubSectionCard({ subSection, index, isExpanded, onToggle, onUpda
               return <DialogueCard key={dialogue.id} dialogue={dialogue} index={displayIndex} subSectionIds={allSubSections}
                 onUpdate={(updated) => updateDialogue(dialogue.id, updated)}
                 onDelete={() => removeItem(ti)}
-                onDragStart={(e) => handleDragStart(e, ti)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, ti)}
+                data-card data-card-idx={ti}
+                style={isDragging ? { opacity: 0.3 } : undefined}
+                onGripDown={(e) => handleGripDown(e, ti)}
               />
             })}
           </div>

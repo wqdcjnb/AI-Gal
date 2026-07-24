@@ -6,7 +6,8 @@
 import { parseAccessToken } from "@/lib/auth/token"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { listAssets, createAsset, updateAsset, deleteAsset } from "@/lib/db/project-store"
+import { listAssets, createAsset, updateAsset, deleteAsset, getAsset } from "@/lib/db/project-store"
+import { deleteFromStorage } from "@/lib/storage/pg-storage"
 import type { AssetRow } from "@/lib/db/project-store"
 
 const COOKIE_NAME = "cloudbase_token"
@@ -91,6 +92,9 @@ export async function DELETE(request: Request) {
   if (!id) return NextResponse.json({ success: false, message: "缺少 id" }, { status: 400 })
 
   try {
+    // 先查 URL，删存储文件，再删 DB 记录
+    const { data: asset } = await getAsset(id)
+    if (asset?.url) await deleteFromStorage(asset.url)
     const { error } = await deleteAsset(id)
     if (error) return NextResponse.json({ success: false, message: error.message }, { status: 500 })
     return NextResponse.json({ success: true })

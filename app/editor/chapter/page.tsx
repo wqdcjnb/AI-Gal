@@ -143,7 +143,7 @@ export default function ChapterPage() {
       />
 
       {/* Center Panel */}
-      <div className="flex-1 overflow-y-auto bg-background p-6">
+      <div className="flex-1 overflow-y-auto bg-background p-6" data-scroll-container>
         {selectedChapter ? (
           selectedSubSectionId ? (
             <SubSectionEditor

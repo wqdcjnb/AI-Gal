@@ -32,9 +32,7 @@ export function CharEditPanel({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => setCropImage(reader.result as string)
-    reader.readAsDataURL(file)
+    setCropImage(URL.createObjectURL(file))
     e.target.value = ''
   }
 

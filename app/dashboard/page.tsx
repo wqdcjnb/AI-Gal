@@ -236,6 +236,8 @@ export default function DashboardPage() {
   );
 }
 
+import { compressCover } from "@/lib/image-utils"
+
 // ========== Project Card ==========
 function ProjectCard({
   project,
@@ -477,8 +479,8 @@ function CreateProjectDialog({
   const [selectedStructure, setSelectedStructure] = useState<string>('');
   const [chapterCount, setChapterCount] = useState(6);
   const [synopsis, setSynopsis] = useState('');
-  const [coverDataUrl, setCoverDataUrl] = useState<string>("");
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const coverFileRef = useRef<File | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -664,19 +666,16 @@ function CreateProjectDialog({
               作品封面
               <span className="text-xs text-stone-400 ml-2 font-normal">可选，后期可添加</span>
             </Label>
-            <input ref={coverInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
+            <input ref={coverInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={async (e) => {
               const f = e.target.files?.[0]; if (f && ['image/png','image/jpeg','image/webp'].includes(f.type)) {
                 setCoverPreview(URL.createObjectURL(f));
-                // 同时读成 base64 data URL 以便存储
-                const reader = new FileReader();
-                reader.onload = () => setCoverDataUrl(reader.result as string);
-                reader.readAsDataURL(f);
+                coverFileRef.current = await compressCover(f);
               }
             }} className="hidden" />
             {coverPreview ? (
               <div className="relative rounded-lg overflow-hidden border border-pink-200">
                 <img src={coverPreview} alt="封面" className="w-full aspect-[16/10] object-cover" />
-                <button onClick={() => { setCoverPreview(null); if (coverInputRef.current) coverInputRef.current.value = '' }} className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">✕</button>
+                <button onClick={() => { setCoverPreview(null); coverFileRef.current = null; if (coverInputRef.current) coverInputRef.current.value = '' }} className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">✕</button>
               </div>
             ) : (
               <div onClick={() => coverInputRef.current?.click()} className="flex items-center justify-center rounded-lg border-2 border-dashed border-stone-200 bg-stone-50/50 py-6 cursor-pointer hover:border-pink-200 hover:bg-pink-50/30 transition-all">
@@ -704,10 +703,9 @@ function CreateProjectDialog({
               if (gameName.trim() && selectedStyles.length > 0 && selectedSetting && selectedStructure) {
                 let finalCoverUrl = ""
                 let coverDisplayUrl = ""
-                if (coverDataUrl) {
-                  const blob = await fetch(coverDataUrl).then(r => r.blob())
+                if (coverFileRef.current) {
                   const fd = new FormData()
-                  fd.append("cover", blob, "cover.png")
+                  fd.append("cover", coverFileRef.current)
                   const uploadRes = await fetch("/api/projects/cover", { method: "POST", body: fd })
                   const uploadJson = await uploadRes.json()
                   if (uploadJson.success) {
@@ -716,7 +714,7 @@ function CreateProjectDialog({
                   }
                 }
                 onCreate({ name: gameName.trim(), style: selectedStyles.join(","), setting: selectedSetting, structure: selectedStructure, chapterCount, synopsis, coverUrl: finalCoverUrl, coverDisplayUrl })
-                setGameName(''); setSelectedStyles([]); setSelectedSetting(''); setSelectedStructure(''); setChapterCount(6); setSynopsis(''); setCoverPreview(null); setCoverDataUrl("")
+                setGameName(''); setSelectedStyles([]); setSelectedSetting(''); setSelectedStructure(''); setChapterCount(6); setSynopsis(''); setCoverPreview(null); coverFileRef.current = null
               }
               onOpenChange(false);
             }}
@@ -747,7 +745,7 @@ function SettingsDialog({
   const [selectedSetting, setSelectedSetting] = useState('')
   const [synopsis, setSynopsis] = useState('')
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
-  const [coverDataUrl, setCoverDataUrl] = useState("")
+  const coverFileRef = useRef<File | null>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -757,17 +755,15 @@ function SettingsDialog({
       setSelectedSetting(project.setting)
       setSynopsis(project.synopsis || '')
       setCoverPreview(project.cover_url || null)
-      setCoverDataUrl("")
+      coverFileRef.current = null
     }
   }, [project])
 
-  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
     if (!['image/png','image/jpeg','image/webp'].includes(file.type)) return
     setCoverPreview(URL.createObjectURL(file))
-    const reader = new FileReader()
-    reader.onload = () => setCoverDataUrl(reader.result as string)
-    reader.readAsDataURL(file)
+    coverFileRef.current = await compressCover(file)
   }
 
   return (
@@ -863,7 +859,7 @@ function SettingsDialog({
             {coverPreview ? (
               <div className="relative rounded-lg overflow-hidden border border-pink-200">
                 <img src={coverPreview} alt="封面预览" className="w-full aspect-[16/10] object-cover" />
-                <button onClick={() => { setCoverPreview(null); if (coverInputRef.current) coverInputRef.current.value = '' }} className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">✕</button>
+                <button onClick={() => { setCoverPreview(null); coverFileRef.current = null; if (coverInputRef.current) coverInputRef.current.value = '' }} className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">✕</button>
               </div>
             ) : (
               <div onClick={() => coverInputRef.current?.click()} className="flex items-center justify-center rounded-lg border-2 border-dashed border-stone-200 bg-stone-50/50 py-6 cursor-pointer hover:border-pink-200 hover:bg-pink-50/30 transition-all">
@@ -883,15 +879,16 @@ function SettingsDialog({
             if (!name.trim() || !project) return
             let finalCoverUrl = project.cover_url || ""
             let coverDisplayUrl = ""
-            if (coverDataUrl) {
-              const blob = await fetch(coverDataUrl).then(r => r.blob())
+            if (coverFileRef.current) {
               const fd = new FormData()
-              fd.append("cover", blob, "cover.png")
+              fd.append("cover", coverFileRef.current)
+              fd.append("projectId", project.id)
               const uploadRes = await fetch("/api/projects/cover", { method: "POST", body: fd })
               const uploadJson = await uploadRes.json()
               if (uploadJson.success) {
                 finalCoverUrl = uploadJson.data.cdnUrl
                 coverDisplayUrl = uploadJson.data.cdnUrl
+                coverFileRef.current = null
               }
             }
             onSave(project.id, { name: name.trim(), style: selectedStyles.join(","), setting: selectedSetting, synopsis, coverUrl: finalCoverUrl, coverDisplayUrl })

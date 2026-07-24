@@ -81,37 +81,39 @@ export function TreeView({
   return (
     <div className="space-y-6">
       {/* Common Route */}
-      {commonChapters.length > 0 && (
-        <div>
-          <div className="rounded-lg border border-indigo-200 overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-indigo-50/50 transition-colors" onClick={() => toggleRoute('common')}>
-              <div className="flex items-center gap-2">
-                <ChevronDown className={cn("h-3 w-3 text-indigo-400 transition-transform", collapsedRoutes.has('common') && "-rotate-90")} />
-                <span className="text-indigo-500 text-sm">📖</span>
-                <span className="text-sm font-medium text-foreground">{T.commonLabel}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600">{commonChapters.length} 章</span>
-              </div>
+      <div>
+        <div className="rounded-lg border border-indigo-200 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-indigo-50/50 transition-colors" onClick={() => toggleRoute('common')}>
+            <div className="flex items-center gap-2">
+              <ChevronDown className={cn("h-3 w-3 text-indigo-400 transition-transform", collapsedRoutes.has('common') && "-rotate-90")} />
+              <span className="text-indigo-500 text-sm">📖</span>
+              <span className="text-sm font-medium text-foreground">{T.commonLabel}</span>
+              <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600">{commonChapters.length} 章</span>
             </div>
-            {!collapsedRoutes.has('common') && (
-              <div className="px-3 pb-3">
-                <div className="mb-3 rounded-lg border-l-4 border-indigo-400 bg-indigo-50/50 px-4 py-2">
-                  <p className="text-xs text-indigo-700"><span className="font-medium">{T.commonLabel}</span> — {T.commonDesc}</p>
-                </div>
+          </div>
+          {!collapsedRoutes.has('common') && (
+            <div className="px-3 pb-3">
+              <div className="mb-3 rounded-lg border-l-4 border-indigo-400 bg-indigo-50/50 px-4 py-2">
+                <p className="text-xs text-indigo-700"><span className="font-medium">{T.commonLabel}</span> — {T.commonDesc}</p>
+              </div>
+              {commonChapters.length > 0 ? (
                 <div className="space-y-2">
                   {commonChapters.map((chapter, idx) => (
                     <ChapterCard key={chapter.id} {...props} chapter={chapter} index={idx} isBranching={isBranching} displayNumber={idx + 1} />
                   ))}
                 </div>
-                {onAddChapter && (
-                  <Button variant="ghost" size="sm" className="w-full mt-2 text-indigo-600 hover:bg-indigo-50 h-7 text-xs" onClick={() => onAddChapter('common')}>
-                    <Plus className="h-3 w-3 mr-1" />{T.addCommon}
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-4">暂无章节，点击下方按钮添加</p>
+              )}
+              {onAddChapter && (
+                <Button variant="ghost" size="sm" className="w-full mt-2 text-indigo-600 hover:bg-indigo-50 h-7 text-xs" onClick={() => onAddChapter('common')}>
+                  <Plus className="h-3 w-3 mr-1" />{T.addCommon}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Branch Point */}
       {hasBranches && (

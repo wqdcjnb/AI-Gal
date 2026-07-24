@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Upload, Search, Layers, List, FolderOpen, Sparkles, X, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { compressImage } from '@/lib/image-utils'
 import { useProject } from '@/app/editor/_components/project-provider'
 import { assetCategories, colorMap, placeholderGradients } from '@/app/editor/_lib/constants'
 import type { AssetCategory, AssetItem } from '@/app/editor/_lib/types'
@@ -91,45 +92,66 @@ export default function AssetsPage() {
     setUploadProgress(0)
 
     try {
-      // 1. 上传文件到云存储（XHR 跟踪进度）
-      const fd = new FormData()
-      fd.append('file', file)
-      const uploadJson = await new Promise<any>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('POST', `/api/upload/${activeCategory}`)
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100))
-        }
-        xhr.onload = () => {
-          try { resolve(JSON.parse(xhr.responseText)) } catch { reject(new Error('parse error')) }
-        }
-        xhr.onerror = () => reject(new Error('network error'))
-        xhr.send(fd)
-      })
-      if (!uploadJson.success) return
+      // 0. 图片压缩（背景/CG，音频跳过）
+      let uploadFile = file
+      const isImage = file.type.startsWith('image/') && (activeCategory === 'background' || activeCategory === 'cg')
+      if (isImage) {
+        uploadFile = await compressImage(file, activeCategory === 'cg' ? 2560 : 1920, 'image/jpeg', activeCategory === 'cg' ? 0.9 : 0.85)
+      }
 
-      // 2. 自动生成名称
+      // 1. 立即显示占位（blob URL 或临时状态）
       const prefix = uploadCfg.namePrefix
       const existingSameCat = categoryAssets
       let n = 1
       while (existingSameCat.some(a => a.name === `${prefix}${n}`)) n++
       const autoName = `${prefix}${n}`
+      const tempId = `tmp-${Date.now()}`
+      const blobUrl = isImage ? URL.createObjectURL(uploadFile) : ''
+      const placeholder: AssetItem = {
+        id: tempId, name: `${autoName} (上传中...)`, category: activeCategory,
+        url: blobUrl, size: file.size, usageCount: 0, usedIn: [], createdAt: new Date().toISOString(),
+      }
+      setAssets(prev => [placeholder, ...prev])
+      setUploadProgress(0)
 
-      // 3. 创建数据库记录
-      const createRes = await fetch('/api/assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: project.id,
-          name: autoName,
-          category: activeCategory,
-          url: uploadJson.data.cdnUrl,
-          size: uploadJson.data.size || file.size,
-        }),
-      })
-      const createJson = await createRes.json()
-      if (createJson.success) {
-        setAssets(prev => [apiToAsset(createJson.data), ...prev])
+      // 2. 后台上传 + 创建 DB 记录
+      const fd = new FormData()
+      fd.append('file', uploadFile)
+      try {
+        const uploadJson = await new Promise<any>((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', `/api/upload/${activeCategory}`)
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100))
+          }
+          xhr.onload = () => {
+            try { resolve(JSON.parse(xhr.responseText)) } catch { reject(new Error('parse error')) }
+          }
+          xhr.onerror = () => reject(new Error('network error'))
+          xhr.send(fd)
+        })
+        if (!uploadJson.success) { setAssets(prev => prev.filter(a => a.id !== tempId)); return }
+
+        // 3. 创建数据库记录
+        const createRes = await fetch('/api/assets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: project.id,
+            name: autoName,
+            category: activeCategory,
+            url: uploadJson.data.cdnUrl,
+            size: uploadJson.data.size || file.size,
+          }),
+        })
+        const createJson = await createRes.json()
+        if (createJson.success) {
+          if (blobUrl) URL.revokeObjectURL(blobUrl)
+          const real = apiToAsset(createJson.data)
+          setAssets(prev => prev.map(a => a.id === tempId ? real : a))
+        }
+      } catch {
+        setAssets(prev => prev.filter(a => a.id !== tempId))
       }
     } catch {}
     setUploading(false)
@@ -178,7 +200,7 @@ export default function AssetsPage() {
         <div>
           <h2 className="text-xl font-semibold text-foreground">素材管理</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            管理游戏所需的所有素材资源 — 背景、CG、BGM、音效、语音
+            管理游戏所需的所有素材资源 — 背景、CG、BGM、音效
           </p>
         </div>
       </div>

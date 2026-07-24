@@ -18,6 +18,35 @@ export function toCdnUrl(fileID: string): string {
   return `https://${bucketId}.tcb.qcloud.la/${filePath}`
 }
 
+/**
+ * CDN URL → cloud://fileID（用于删除旧文件）
+ * 兼容 tcb.qcloud.la 和 cos.*.myqcloud.com 两种域名
+ */
+function cdnUrlToFileId(cdnUrl: string): string | null {
+  // tcb.qcloud.la 格式
+  let match = cdnUrl.match(/https:\/\/(.+)\.tcb\.qcloud\.la\/(.+)/)
+  if (match) {
+    return `cloud://${process.env.CLOUDBASE_ENV_ID}.${match[1]}/${match[2]}`
+  }
+  // COS 域名格式: https://{bucket}.cos.{region}.myqcloud.com/{path}
+  match = cdnUrl.match(/https:\/\/(.+)\.cos\.(.+)\.myqcloud\.com\/(.+)/)
+  if (match) {
+    return `cloud://${process.env.CLOUDBASE_ENV_ID}.${match[1]}/${match[3]}`
+  }
+  return null
+}
+
+/** 删除云存储文件 */
+export async function deleteFromStorage(fileIdOrUrl: string) {
+  const fileID = fileIdOrUrl.startsWith("cloud://") ? fileIdOrUrl : cdnUrlToFileId(fileIdOrUrl)
+  if (!fileID) return
+  try {
+    await cloudbaseApp.deleteFile({ fileList: [fileID] })
+  } catch (e: any) {
+    console.error("删除旧文件失败:", e?.message || e)
+  }
+}
+
 export async function uploadToPGStorage(params: {
   cloudPath: string
   fileContent: Buffer
@@ -30,5 +59,7 @@ export async function uploadToPGStorage(params: {
   const uploadResult = await cloudbaseApp.uploadFile({ cloudPath, fileContent })
   if (!uploadResult.fileID) return null
 
-  return { cdnUrl: toCdnUrl(uploadResult.fileID) }
+  // 优先用 SDK 返回的直接 URL，否则用 fileID 拼接
+  const cdnUrl = (uploadResult as any).downloadUrl || (uploadResult as any).url || toCdnUrl(uploadResult.fileID)
+  return { cdnUrl }
 }

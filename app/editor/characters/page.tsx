@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Loader2, Sparkles, Users, ImageIcon, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { compressSprite } from '@/lib/image-utils'
 import { useProject } from '@/app/editor/_components/project-provider'
 import { useProjectStore } from '@/lib/state/project-store-zustand'
 import type { Character, Sprite, SavedCombo } from '@/app/editor/_lib/types'
@@ -271,17 +272,28 @@ export default function CharactersPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0]
                       if (!file || !selectedCharId) return
+                      const compressed = await compressSprite(file)
+                      // 1. 立即显示（blob URL）
+                      const blobUrl = URL.createObjectURL(compressed)
+                      const existing = savedCombos[selectedCharId] || []
+                      let n = 1; while (existing.some(c => c.name === `角色立绘${n}`)) n++
+                      const comboId = `cmb-${Date.now()}`
+                      const combo: SavedCombo = { id: comboId, spriteId: '', name: `角色立绘${n}`, url: blobUrl }
+                      const newCombos = { ...savedCombos, [selectedCharId]: [...existing, combo] }
+                      saveCombos(newCombos)
+                      // 2. 后台上传
                       const fd = new FormData()
-                      fd.append('file', file)
+                      fd.append('file', compressed)
                       fd.append('folder', 'sprites')
                       try {
                         const res = await fetch('/api/upload/image', { method: 'POST', body: fd })
                         const json = await res.json()
                         if (json.success && json.data?.cdnUrl) {
-                          const existing = savedCombos[selectedCharId] || []
-                          let n = 1; while (existing.some(c => c.name === `角色立绘${n}`)) n++
-                          const combo: SavedCombo = { id: `cmb-${Date.now()}`, spriteId: '', name: `角色立绘${n}`, url: json.data.cdnUrl }
-                          saveCombos({ ...savedCombos, [selectedCharId]: [...existing, combo] })
+                          // 3. 替换为 CDN URL，释放 blob
+                          URL.revokeObjectURL(blobUrl)
+                          const latest = useProjectStore.getState().savedCombos
+                          const current = latest[selectedCharId] || []
+                          saveCombos({ ...latest, [selectedCharId]: current.map((c: any) => c.id === comboId ? { ...c, url: json.data.cdnUrl } : c) })
                         }
                       } catch {}
                     }} />

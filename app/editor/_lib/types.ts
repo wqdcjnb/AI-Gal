@@ -44,6 +44,7 @@ export interface DialogueLine {
   spriteExpression?: string
   spriteOutfit?: string
   spritePose?: string
+  spriteList?: { spriteId: string; position: 'left' | 'center' | 'right' }[]
   // 演出设置
   backgroundChange?: string
   bgmChange?: string
@@ -51,6 +52,11 @@ export interface DialogueLine {
   cgTrigger?: string
   // For choice type
   choices?: ChoiceOption[]
+  // 语音参数（决定"怎么说"）
+  emotion?: 'normal' | 'happy' | 'sad' | 'angry' | 'surprised' | 'shy'
+  speed?: 'slow' | 'semi-slow' | 'normal' | 'semi-fast' | 'fast'
+  volume?: number   // -50 ~ 100
+  pause?: number    // 毫秒，停顿时间
 }
 
 // ── Trigger (触发器) ──
@@ -97,6 +103,9 @@ export interface Character {
   temperament?: string[]
   extraDescription?: string
   sprites: Sprite[] // All sprite variations for this character
+  // 语音
+  voiceProfileId?: string  // 绑定的声形 ID
+  isProtagonist?: boolean  // 是否男主（旁白和男主不配音）
 }
 
 // ==================== Asset Types ====================
@@ -221,9 +230,7 @@ export interface DialogueCardProps {
   onUpdate?: (dialogue: DialogueLine) => void
   onDelete?: () => void
   subSectionIds?: { id: string; title: string }[]
-  onDragStart?: (e: React.DragEvent, index: number) => void
-  onDragOver?: (e: React.DragEvent) => void
-  onDrop?: (e: React.DragEvent, index: number) => void
+  onGripDown?: (e: React.PointerEvent) => void
 }
 
 // Saved sprite combination (gallery item)
@@ -235,4 +242,19 @@ export interface SavedCombo {
   poseId?: string
   name: string
   url?: string
+}
+
+// ── Voice Profile (声形) ──
+export interface VoiceProfile {
+  id: string
+  projectId: string
+  name: string
+  gender: 'female' | 'male' | 'child'
+  age: string
+  voiceStyle: string
+  tone: string
+  ttsSpeakerId: string
+  description?: string
+  createdAt: number
+  updatedAt: number
 }
